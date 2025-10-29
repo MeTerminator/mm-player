@@ -1,0 +1,109 @@
+/* 进度条 */
+
+.progress-bar-container {
+  position: fixed;
+  margin: 0;
+  padding: 0;
+  top: 0;
+  height: 5px;
+  width: 100%;
+  z-index: 10000;
+}
+
+.progress-bar {
+  height: 100%;
+  width: 0;
+  background-color: green;
+  position: relative;
+}
+
+/* 信息区 */
+
+.song-container {
+  position: fixed;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background-color: rgba(0, 0, 0, 0.3);
+  padding: 20px;
+  border-radius: 20px;
+  bottom: 7vh;
+  left: 4vw;
+  color: white;
+  z-index: 10000;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: rgba(255,255,255, 0.3) 1px solid;
+  box-shadow: 5px 5px 20px rgba(0,0,0, 0.3);
+}
+
+@media (max-height: 600px) {
+  .song-container {
+    display: none;
+  }
+}
+
+.song-cover img {
+  max-height: 15vh;
+  object-fit: cover;
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.song-description {
+  display: flex;
+  flex-direction: column;
+}
+
+.song-info-line {
+  margin: 4px 0;
+}
+
+.song-info-line span {
+  margin-right: 10px;
+}
+
+.song-status:hover {
+  cursor: pointer;
+  font-weight: bold;
+}
+
+
+/* 歌词区 */
+.lyrics-container {
+  width: 100%;
+  padding: 0 20vw;
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+
+}
+
+.lyrics-content {
+  margin: 0 auto;
+  text-align: center;
+}
+
+.lyrics-animation-layer {
+  font-size: 4em;
+  font-weight: bold;
+  color: rgba(255, 255, 255, 0.7);
+  text-shadow: #fff 1px 0 30px;
+  animation: lyrics-animation 0.5s cubic-bezier(0.54, 0.02, 0.27, 1.08);
+}
+
+@keyframes lyrics-animation {
+  0% {
+    opacity: 0.4;
+    filter: blur(10px);
+    transform: scaleX(1.7) rotate(5deg);
+    ;
+  }
+
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: scaleX(1) rotate(0deg);
+    ;
+  }
+}

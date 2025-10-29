@@ -2,7 +2,6 @@ import { useRef, useState, useEffect, useCallback } from 'react';
 import MeTMusicPlayer from './utils/metmusic-player-esm';
 import { IoMdPerson, IoMdDisc } from "react-icons/io";
 import { parseLrc } from './utils/lrc-parser';
-import { getColor } from './utils/color-thief';
 import './Lyrics.css'
 
 const SESSION_ID = "bd33aedc-72b8-4f3b-b5a6-1c1bccd9f0f0";
@@ -30,7 +29,6 @@ function Lyrics() {
         progressMax: 100,
         progressValue: 0,
         isWsOpen: false,
-        themeColor: null,
     });
 
     const parsedLyricsRef = useRef([]);
@@ -96,32 +94,6 @@ function Lyrics() {
             };
         }
     }, [handlePlayerStateChange]);
-
-    // 监听封面 URL，在 URL 确定后提取颜色
-    useEffect(() => {
-        const fetchThemeColor = async () => {
-            const url = playerState.songCoverUrl;
-            if (url && !playerState.themeColor) { // 仅在 URL 变化且当前没有颜色时才提取
-                try {
-                    // 假设 getColor 是从上一个回复中导入的客户端颜色提取函数
-                    const rgbColorArray = await getColor(url, 3); // 提取一个主色调，质量设为 3
-
-                    if (rgbColorArray) {
-                        const cssColor = `rgb(${rgbColorArray[0]}, ${rgbColorArray[1]}, ${rgbColorArray[2]})`;
-                        setPlayerState(prev => ({
-                            ...prev,
-                            themeColor: cssColor
-                        }));
-                    }
-                } catch (error) {
-                    console.error("Error extracting theme color:", error);
-                    setPlayerState(prev => ({ ...prev, themeColor: null }));
-                }
-            }
-        };
-
-        fetchThemeColor();
-    }, [playerState.songCoverUrl, playerState.themeColor]); // 依赖封面 URL 和当前是否有颜色状态
 
     // 播放/暂停按钮控制
     const togglePlayback = () => {
@@ -192,17 +164,7 @@ function Lyrics() {
             <div
                 className="background-layer"
                 style={{
-                    position: "fixed",
-                    top: 0,
-                    left: 0,
-                    width: "100vw",
-                    height: "100vh",
                     backgroundImage: `url(${playerState.songCoverUrl})`,
-                    backgroundSize: "cover",
-                    backgroundPosition: "center",
-                    filter: "blur(30px) brightness(0.5)",
-                    zIndex: -1,
-                    transition: "background-image 0.5s ease-in-out",
                 }}
             ></div>
 

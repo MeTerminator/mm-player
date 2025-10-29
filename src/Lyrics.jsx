@@ -95,6 +95,104 @@ function Lyrics() {
         }
     }, [handlePlayerStateChange]);
 
+    useEffect(() => {
+        const audio = audioRef.current;
+        if (!audio) return;
+
+        const canvas = document.getElementById("audio-visualizer");
+        const ctx = canvas.getContext("2d");
+        let audioCtx, analyser, source, animationId;
+
+        // 调整 Canvas 尺寸
+        const resizeCanvas = () => {
+            canvas.width = window.innerWidth;
+            canvas.height = 120;
+        };
+        resizeCanvas();
+        window.addEventListener("resize", resizeCanvas);
+
+        // 初始化可视化，只执行一次
+        const initVisualizer = () => {
+            if (audioCtx) return; // 避免重复初始化
+
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioCtx.createAnalyser();
+
+            // 确保不会重复绑定
+            if (!source) {
+                source = audioCtx.createMediaElementSource(audio);
+                source.connect(analyser);
+                analyser.connect(audioCtx.destination);
+            }
+
+            analyser.fftSize = 256;
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            const draw = () => {
+                animationId = requestAnimationFrame(draw);
+                analyser.getByteFrequencyData(dataArray);
+
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                const barWidth = (canvas.width / bufferLength) * 1.2;
+                let x = 0;
+
+                for (let i = 0; i < bufferLength; i++) {
+                    const barHeight = dataArray[i] * 0.3;
+                    const y = barHeight;
+
+                    // 创建单条渐变 —— 顶部亮，底部逐渐透明
+                    const gradient = ctx.createLinearGradient(x, 0, x, y);
+                    gradient.addColorStop(0, "rgba(255,255,255,0.6)"); // 顶部亮
+                    gradient.addColorStop(0.7, "rgba(255,255,255,0.3)"); // 中间柔光
+                    gradient.addColorStop(1, "rgba(255,255,255,0)"); // 底部透明（阴影效果）
+
+                    ctx.fillStyle = gradient;
+
+                    // 圆顶半径
+                    const radius = barWidth / 2;
+
+                    // 绘制顶部圆弧
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.arc(x + barWidth / 2, 0, radius, Math.PI, 0, false);
+                    ctx.fill();
+
+                    // 绘制矩形部分（倒立）
+                    ctx.fillRect(x, 0, barWidth, y - radius);
+
+                    x += barWidth + 0.5;
+                }
+            };
+
+
+
+            draw();
+        };
+
+        // 监听播放事件，只初始化一次 visualizer
+        const handlePlay = () => {
+            if (!audioCtx) {
+                initVisualizer();
+            } else if (audioCtx.state === "suspended") {
+                audioCtx.resume();
+            }
+        };
+
+        audio.addEventListener("play", handlePlay);
+
+        return () => {
+            cancelAnimationFrame(animationId);
+            window.removeEventListener("resize", resizeCanvas);
+            audio.removeEventListener("play", handlePlay);
+            if (audioCtx) {
+                audioCtx.close();
+            }
+        };
+    }, []);
+
+
     // 播放/暂停按钮控制
     const togglePlayback = () => {
         if (playerRef.current?.ws?.readyState !== WebSocket.OPEN && !playerState.isPlaying) return;
@@ -168,43 +266,50 @@ function Lyrics() {
                 }}
             ></div>
 
+            {/* 音频可视化 */}
+            <canvas id="audio-visualizer" className="audio-visualizer"></canvas>
+
             {/* Audio 标签 */}
             <audio
                 ref={audioRef}
                 id="audio-player"
+                crossOrigin="anonymous"
                 onTimeUpdate={handleTimeUpdate}
                 onDurationChange={handleDurationChange}
                 preload="auto"
             />
 
-            {/* 进度条 */}
-            <div className="progress-bar-container">
-                <div
-                    className="progress-bar"
-                    style={{ width: `${(playerState.progressValue / playerState.progressMax) * 100}%` }}
-                ></div>
-            </div>
             {/* 歌曲信息 */}
             <div className="song-container">
-                <div className="song-cover">
-                    <img
-                        src={playerState.songCoverUrl}
-                        style={{
-                            display: (playerState.songCoverPmid ? 'block' : 'none')
-                        }}
-                    />
-                </div>
-                <div className="song-description">
-                    <h1 className="song-name">{playerState.songName || "MeT-Music Player"}</h1>
-                    <div className="song-info">
-                        <div className="song-info-line"><IoMdPerson /> {playerState.songSinger}</div>
-                        <div className="song-info-line"><IoMdDisc /> {playerState.songAlbum}</div>
-                        <div className="song-info-line">
-                            <span>{playerState.currentTime} / {playerState.duration}</span>
-                            <span className='song-status' onClick={togglePlayback}>{playerState.statusText}</span>
-                        </div>
-
+                <div className="song-container-box">
+                    <div className="song-cover">
+                        <img
+                            src={playerState.songCoverUrl}
+                            style={{
+                                display: (playerState.songCoverPmid ? 'block' : 'none')
+                            }}
+                        />
                     </div>
+                    <div className="song-description">
+                        <h1 className="song-name">{playerState.songName || "MeT-Music Player"}</h1>
+                        <div className="song-info">
+                            <div className="song-info-line"><IoMdPerson /> {playerState.songSinger}</div>
+                            <div className="song-info-line"><IoMdDisc /> {playerState.songAlbum}</div>
+                            <div className="song-info-line">
+                                <span>{playerState.currentTime} / {playerState.duration}</span>
+                                <span className='song-status' onClick={togglePlayback}>{playerState.statusText}</span>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+
+                {/* 进度条 */}
+                <div className="progress-bar-container">
+                    <div
+                        className="progress-bar"
+                        style={{ width: `${(playerState.progressValue / playerState.progressMax) * 100}%` }}
+                    ></div>
                 </div>
             </div>
 

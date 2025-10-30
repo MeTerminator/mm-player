@@ -1,0 +1,75 @@
+/* 信息区 */
+
+.song-container {
+  position: fixed;
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: 20px;
+  bottom: 3vh;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255, 255, 255, 0.9);
+  z-index: 10000;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: rgba(255, 255, 255, 0.3) 1px solid;
+  box-shadow: 5px 5px 20px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  font-size: x-small;
+}
+
+.song-container-box {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px;
+}
+
+.song-cover img {
+  max-height: 15vh;
+  object-fit: cover;
+  border-radius: 10px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.song-description {
+  display: flex;
+  flex-direction: column;
+}
+
+.song-info-line {
+  margin: 4px 0;
+}
+
+.song-info-line span {
+  margin-right: 10px;
+}
+
+.song-status:hover {
+  cursor: pointer;
+  font-weight: bold;
+}
+
+/* 进度条 */
+
+.progress-bar-container {
+  margin: 0;
+  padding: 0;
+  top: 0;
+  height: 5px;
+  width: 100%;
+}
+
+.progress-bar {
+  height: 100%;
+  width: 0;
+  background-color: rgba(255, 255, 255, 0.5);
+  position: relative;
+}
+
+/* 移动端优化 */
+
+@media (max-height: 600px) {
+  .song-container {
+    display: none;
+  }
+}

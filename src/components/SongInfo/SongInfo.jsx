@@ -1,14 +1,45 @@
+import { useState, useEffect } from 'react';
 import { usePlayer } from '../../context/PlayerContext';
 import { IoMdPerson, IoMdDisc } from 'react-icons/io';
 import './SongInfo.css';
 
+const alwaysDisplay = false;
+
 function SongInfo() {
-    const { playerState, togglePlayback } = usePlayer();
+    const { playerState } = usePlayer();
+
+    const { isPlaying } = playerState;
+
+    const [isVisible, setIsVisible] = useState(isPlaying || alwaysDisplay);
+
+    useEffect(() => {
+        let timer;
+
+        if (alwaysDisplay) {
+            setIsVisible(true);
+            return;
+        }
+
+        if (isPlaying) {
+            setIsVisible(true);
+        } else {
+            timer = setTimeout(() => {
+                setIsVisible(false);
+            }, 0);
+        }
+
+        return () => {
+            if (timer) {
+                clearTimeout(timer);
+            }
+        };
+
+    }, [isPlaying]);
+
+    const containerClassName = `song-container ${isVisible ? 'visible' : 'hidden'}`;
 
     return (
-
-        <div className="song-container">
-            {/* ... 歌曲信息展示，直接使用 playerState */}
+        <div className={containerClassName}>
             <div className="song-container-box">
                 <div className="song-cover">
                     <img
@@ -16,6 +47,7 @@ function SongInfo() {
                         style={{
                             display: (playerState.songCoverPmid ? 'block' : 'none')
                         }}
+                        alt="Song Cover"
                     />
                 </div>
                 <div className="song-description">
@@ -25,7 +57,7 @@ function SongInfo() {
                         <div className="song-info-line"><IoMdDisc /> {playerState.songAlbum}</div>
                         <div className="song-info-line">
                             <span>{playerState.currentTime} / {playerState.duration}</span>
-                            <span className='song-status' onClick={() => togglePlayback()}>{playerState.statusText}</span>
+                            <span className='song-status'>{playerState.statusText}</span>
                         </div>
                     </div>
                 </div>

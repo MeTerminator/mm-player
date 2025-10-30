@@ -1,18 +1,17 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-// 从新文件导入 Context
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { PlayerContext } from './PlayerContext';
 import MeTMusicPlayer from '../utils/metmusic-player-esm';
 import { parseLrc } from '../utils/lrc-parser';
 
 const SESSION_ID = "bd33aedc-72b8-4f3b-b5a6-1c1bccd9f0f0";
 
-// 3. 创建 Provider Component
+// 自动播放
+const alwaysPlaying = true;
+
 export const PlayerProvider = ({ children }) => {
     const audioRef = useRef(null);
     const playerRef = useRef(null);
     const parsedLyricsRef = useRef([]);
-
-    // 使用一个 ref 来保存最新的 playerState，以便在不依赖 playerState 的 useCallback 中访问它
     const playerStateRef = useRef(null);
 
     const [playerState, setPlayerState] = useState({
@@ -33,13 +32,8 @@ export const PlayerProvider = ({ children }) => {
         progressMax: 100,
         progressValue: 0,
         isWsOpen: false,
+        alwaysPlaying: alwaysPlaying, 
     });
-
-    // 保持最新状态的引用
-    useEffect(() => {
-        playerStateRef.current = playerState;
-    }, [playerState]);
-
 
     // ==================== 核心状态更新逻辑 (稳定化) ====================
 
@@ -165,11 +159,20 @@ export const PlayerProvider = ({ children }) => {
 
     const togglePlayback = useCallback(() => {
         const isWsOpen = playerRef.current?.ws?.readyState === WebSocket.OPEN;
-        const isPlaying = playerStateRef.current?.isPlaying;
+        const currentState = playerStateRef.current;
+        const isCurrentlyPlaying = currentState?.isPlaying;
+        const isAlwaysPlaying = currentState?.alwaysPlaying;
 
-        if (!isWsOpen && !isPlaying) return;
+        if (!isWsOpen && !isCurrentlyPlaying) return;
 
-        playerRef.current?.togglePlayPause();
+        if (isAlwaysPlaying && !isCurrentlyPlaying) {
+            playerRef.current?.play();
+        } else if (isAlwaysPlaying && isCurrentlyPlaying) {
+            console.log('持续播放已启用，无法暂停');
+        } 
+        else {
+            playerRef.current?.togglePlayPause();
+        }
     }, []);
 
     const seekTo = useCallback((time) => {

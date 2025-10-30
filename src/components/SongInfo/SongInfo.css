@@ -6,7 +6,7 @@
   border-radius: 20px;
   bottom: 3vh;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) translateY(0);
   color: rgba(255, 255, 255, 0.9);
   z-index: 10000;
   -webkit-backdrop-filter: blur(10px);
@@ -15,6 +15,15 @@
   box-shadow: 5px 5px 20px rgba(0, 0, 0, 0.3);
   overflow: hidden;
   font-size: x-small;
+  transition: transform 0.5s ease-in-out;
+}
+
+.song-container.visible {
+  transform: translateX(-50%) translateY(0);
+}
+
+.song-container.hidden {
+  transform: translateX(-50%) translateY(500%);
 }
 
 .song-container-box {
@@ -42,11 +51,6 @@
 
 .song-info-line span {
   margin-right: 10px;
-}
-
-.song-status:hover {
-  cursor: pointer;
-  font-weight: bold;
 }
 
 /* 进度条 */

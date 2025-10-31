@@ -5,3 +5,12 @@
     -webkit-user-select: none;
     user-select: none;
 }
+
+:root {
+    --maintext-font: 'SpotifyMixUITitle', sans-serif;
+}
+
+@font-face {
+    font-family: 'SpotifyMixUITitle';
+    src: url('./fonts/SpotifyMixUITitleVariable.woff2') format('woff2');
+}

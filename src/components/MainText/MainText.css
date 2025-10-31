@@ -10,15 +10,16 @@
 }
 
 .maintext-container-playing {
-  transform: translateY(-70%);
+  transform: translateY(-65%);
 }
 
 .maintext {
-  font-size: 18em;
+  font-family: var(--maintext-font);
+  font-size: 20em;
   font-weight: bold;
   background: linear-gradient(to bottom left,
-      rgba(255, 255, 255, 0.9),
-      rgba(255, 255, 255, 0.6));
+      rgba(255, 255, 255, 0.7),
+      rgba(255, 255, 255, 0.5));
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -26,7 +27,7 @@
 }
 
 .animation-lyrics {
-  font-size: 5em;
+  font-size: 8em;
   transition: none;
   animation: lyrics-animation 0.5s cubic-bezier(0.54, 0.02, 0.27, 1.08);
 }
@@ -43,9 +44,21 @@
   }
 
   .animation-lyrics {
+    font-size: 4em;
+  }
+}
+
+/* 真没招了 这是给 iPhone SE 用的 */
+@media (max-height: 400px) {
+  .maintext-container-playing {
+    transform: translateY(-70%);
+  }
+
+  .animation-lyrics {
     font-size: 3em;
   }
 }
+
 
 @keyframes lyrics-animation {
   0% {

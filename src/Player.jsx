@@ -1,6 +1,6 @@
 import Background from './components/Background/Background';
 import Visualizer from './components/Visualizer/Visualizer';
-import Lyrics from './components/Lyrics/Lyrics';
+import MainText from './components/MainText/MainText';
 import SongInfo from './components/SongInfo/SongInfo';
 
 
@@ -12,7 +12,7 @@ function Player() {
         <>
             <Background />
             <Visualizer />
-            <Lyrics />
+            <MainText />
             <SongInfo />
         </>
     );

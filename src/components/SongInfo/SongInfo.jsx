@@ -53,8 +53,10 @@ function SongInfo() {
                 <div className="song-description">
                     <h1 className="song-name">{playerState.songName || "MeT-Music Player"}</h1>
                     <div className="song-info">
-                        <div className="song-info-line"><IoMdPerson /> {playerState.songSinger}</div>
-                        <div className="song-info-line"><IoMdDisc /> {playerState.songAlbum}</div>
+                        <div className="song-info-basic">
+                            <div className="song-info-line"><IoMdPerson /> {playerState.songSinger}</div>
+                            <div className="song-info-line"><IoMdDisc /> {playerState.songAlbum}</div>
+                        </div>
                         <div className="song-info-line">
                             <span>{playerState.currentTime} / {playerState.duration}</span>
                             <span className='song-status'>{playerState.statusText}</span>

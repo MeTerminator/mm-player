@@ -74,6 +74,26 @@
 
 @media (max-height: 600px) {
   .song-container {
-    display: none;
+    bottom: 2vh;
+    font-size: xx-small;
   }
+
+  .song-info-basic {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+  }
+
+  .song-info-line {
+    margin: 0;
+  }
+
+  .song-container-box {
+    padding: 10px;
+  }
+
+  .progress-bar-container {
+    height: 3px;
+  }
+
 }

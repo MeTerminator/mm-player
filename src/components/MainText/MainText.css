@@ -1,19 +1,20 @@
-/* 歌词区 */
-.lyrics-container {
+.maintext-container {
   width: 100%;
   padding: 0 15vw;
   position: fixed;
   top: 50%;
-  transform: translateY(-60%);
-}
-
-.lyrics-content {
+  transform: translateY(-50%);
   margin: 0 auto;
   text-align: center;
+  transition: all 1s ease-in-out;
 }
 
-.lyrics-animation-layer {
-  font-size: 5em;
+.maintext-container-playing {
+  transform: translateY(-70%);
+}
+
+.maintext {
+  font-size: 18em;
   font-weight: bold;
   background: linear-gradient(to bottom left,
       rgba(255, 255, 255, 0.9),
@@ -21,14 +22,28 @@
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  transition: all 1s ease-in-out;
+}
+
+.animation-lyrics {
+  font-size: 5em;
+  transition: none;
   animation: lyrics-animation 0.5s cubic-bezier(0.54, 0.02, 0.27, 1.08);
 }
 
 /* 移动端优化 */
 
 @media (max-height: 600px) {
-  .lyrics-animation-layer {
-    font-size: 4em;
+  .maintext-container {
+    padding: 0 10vw;
+  }
+
+  .maintext {
+    font-size: 12em;
+  }
+
+  .animation-lyrics {
+    font-size: 3em;
   }
 }
 

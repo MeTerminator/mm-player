@@ -26,11 +26,10 @@
   transition: all 1s ease-in-out;
 }
 
-.animation-lyrics {
+.maintext-lyrics {
   font-size: 6em;
   transition: none;
   white-space: pre-wrap;
-  animation: lyrics-animation 0.5s cubic-bezier(0.54, 0.02, 0.27, 1.08);
 }
 
 /* 移动端优化 */
@@ -44,7 +43,7 @@
     font-size: 12em;
   }
 
-  .animation-lyrics {
+  .maintext-lyrics {
     font-size: 4em;
   }
 }
@@ -55,13 +54,37 @@
     transform: translateY(-70%);
   }
 
-  .animation-lyrics {
+  .maintext-lyrics {
     font-size: 3em;
   }
 }
 
 
-@keyframes lyrics-animation {
+.maintext-lyrics-animation-0 {
+  animation: lyrics-animation-0 0.6s ease-in-out;
+}
+
+@keyframes lyrics-animation-0 {
+  0% {
+    opacity: 0.4;
+    filter: blur(20px);
+    transform: scale(0.4);
+  }
+
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+  }
+
+}
+
+
+.maintext-lyrics-animation-1 {
+  animation: lyrics-animation-1 0.6s cubic-bezier(0.54, 0.02, 0.27, 1.08);
+}
+
+@keyframes lyrics-animation-1 {
   0% {
     opacity: 0.4;
     filter: blur(10px);
@@ -75,3 +98,59 @@
   }
 
 }
+
+.maintext-lyrics-animation-2 {
+  animation: lyrics-animation-2 0.6s ease-in-out;
+}
+
+@keyframes lyrics-animation-2 {
+  0% {
+    opacity: 0.4;
+    filter: blur(10px);
+    transform: rotate(-5deg);
+  }
+
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: rotate(0deg);
+  }
+
+}
+
+.maintext-lyrics-animation-3 {
+  animation: lyrics-animation-3 0.6s ease-in-out;
+}
+
+@keyframes lyrics-animation-3 {
+  0% {
+    opacity: 0.4;
+    filter: blur(10px);
+    transform: rotate(5deg);
+  }
+
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: rotate(0deg);
+  }
+
+}
+
+.maintext-lyrics-animation-4 {
+  animation: lyrics-animation-4 0.6s ease-in-out;
+}
+
+@keyframes lyrics-animation-4 {
+  0% {
+    opacity: 0.4;
+    filter: blur(10px);
+  }
+
+  100% {
+    opacity: 1;
+    filter: blur(0);
+  }
+
+}
+

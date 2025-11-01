@@ -58,9 +58,12 @@ function MainText() {
         }
     }, [playerState.currentLyrics]);
 
+    // 计算歌词动画的 className
+    const layerAnimationClassName = `maintext-lyrics-animation-${animationKey % 5}`;
+
     const containerClassName = `maintext-container ${isPlaying ? 'maintext-container-playing' : ''}`;
-    const layerClassName = `maintext ${isPlaying ? 'animation-lyrics' : ''}`;
-    
+    const layerClassName = `maintext ${isPlaying ? 'maintext-lyrics' : ''} ${isPlaying ? layerAnimationClassName : ''}`;
+
     // 计算要显示的内容
     let content;
     if (isPlaying && playerState.currentLyrics) {

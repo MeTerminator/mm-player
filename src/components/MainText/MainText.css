@@ -27,8 +27,9 @@
 }
 
 .animation-lyrics {
-  font-size: 8em;
+  font-size: 6em;
   transition: none;
+  white-space: pre-wrap;
   animation: lyrics-animation 0.5s cubic-bezier(0.54, 0.02, 0.27, 1.08);
 }
 

@@ -10,21 +10,28 @@ const formatTime = (date) => {
     return `${hours}:${minutes}`;
 };
 
+// 检查字符串是否只包含中文字符和空格
+const shouldReplaceSpaceWithNewline = (str) => {
+    if (!str) return false;
+    // 使用正则表达式检查字符串是否只包含中文字符（\u4e00-\u9fa5）和空格（\s）
+    // 如果匹配成功（即只包含这些字符），返回 true
+    return /^[\u4e00-\u9fa5\s]*$/.test(str);
+};
+
 function MainText() {
     const { playerState } = usePlayer();
     const { isPlaying } = playerState;
 
-    // 1. 新增：用于存储当前时间的 state
+    // 用于存储当前时间的 state
     const [currentTime, setCurrentTime] = useState(formatTime(new Date()));
     const [animationKey, setAnimationKey] = useState(0);
 
-    // 2. 新增：用于在未播放音乐时更新时间的 effect
+    // 用于在未播放音乐时更新时间的 effect
     useEffect(() => {
         let intervalId;
 
         if (!isPlaying) {
             // 设置一个每分钟更新一次的间隔，以保持精确度
-            // 如果希望每秒更新以显示秒数，可以将 60000 更改为 1000
             intervalId = setInterval(() => {
                 setCurrentTime(formatTime(new Date()));
             }, 60000); // 60000 毫秒 = 1 分钟
@@ -54,10 +61,20 @@ function MainText() {
     const containerClassName = `maintext-container ${isPlaying ? 'maintext-container-playing' : ''}`;
     const layerClassName = `maintext ${isPlaying ? 'animation-lyrics' : ''}`;
     
-    // 要显示的内容
-    const content = isPlaying 
-        ? playerState.currentLyrics 
-        : currentTime;
+    // 计算要显示的内容
+    let content;
+    if (isPlaying && playerState.currentLyrics) {
+        const lyrics = playerState.currentLyrics;
+        if (shouldReplaceSpaceWithNewline(lyrics)) {
+            // 如果只包含中文和空格，将空格替换为换行
+            content = lyrics.replace(/ /g, '\n');
+        } else {
+            content = lyrics;
+        }
+    } else {
+        // 未播放时显示时间
+        content = currentTime;
+    }
 
     return (
         <div className={containerClassName}>
@@ -65,7 +82,6 @@ function MainText() {
                 className={layerClassName}
                 key={animationKey}
             >
-                {/* 4. 在 JSX 中显示内容 */}
                 {content}
             </div>
         </div>

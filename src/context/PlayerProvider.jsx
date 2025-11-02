@@ -32,7 +32,7 @@ export const PlayerProvider = ({ children }) => {
         progressMax: 100,
         progressValue: 0,
         isWsOpen: false,
-        alwaysPlaying: alwaysPlaying, 
+        alwaysPlaying: alwaysPlaying,
     });
 
     // ==================== 核心状态更新逻辑 (稳定化) ====================
@@ -169,7 +169,7 @@ export const PlayerProvider = ({ children }) => {
             playerRef.current?.play();
         } else if (isAlwaysPlaying && isCurrentlyPlaying) {
             console.log('持续播放已启用，无法暂停');
-        } 
+        }
         else {
             playerRef.current?.togglePlayPause();
         }
@@ -188,6 +188,24 @@ export const PlayerProvider = ({ children }) => {
         togglePlayback,
         seekTo,
     };
+
+    useEffect(() => {
+        const handleDocumentClick = () => {
+            const audio = audioRef.current;
+            const currentState = playerStateRef.current;
+
+            if (audio && audio.paused && currentState?.songMid) {
+                console.log('检测到用户点击，尝试恢复播放...');
+                audio.play();
+            }
+        };
+
+        document.body.addEventListener('click', handleDocumentClick, true);
+
+        return () => {
+            document.body.removeEventListener('click', handleDocumentClick, true);
+        };
+    }, []);
 
     return (
         <PlayerContext.Provider value={contextValue}>

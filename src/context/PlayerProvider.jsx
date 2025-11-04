@@ -2,8 +2,10 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { PlayerContext } from './PlayerContext';
 import MeTMusicPlayer from '../utils/metmusic-player-esm';
 import { parseLrc } from '../utils/lrc-parser';
+import { getLocalStorageItem } from '../utils/localstorage-utils';
 
-const SESSION_ID = "bd33aedc-72b8-4f3b-b5a6-1c1bccd9f0f0";
+// 获取 Session ID
+const SESSION_ID = getLocalStorageItem('sid') || "";
 
 // 自动播放
 const alwaysPlaying = true;

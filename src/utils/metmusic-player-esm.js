@@ -302,8 +302,17 @@ class MeTMusicPlayer {
                     this.musicStatus = newStatus;
                     this.musicMid = newMid;
 
+                    // 更新播放状态
                     this._updateMusicStatus(newStatus, newMid, musicStartTs);
+
+                    // 自动开始播放音乐（仅当收到反馈并处于播放状态时）
+                    if (newStatus && this.audioPlayer.paused) {
+                        this.audioPlayer.play().catch(err => {
+                            this._wsLog('warn', 'AUTO-PLAY', '接收到 feedback 后自动播放失败', err);
+                        });
+                    }
                 }
+
             } catch (e) {
                 this._wsLog('error', 'WS', '解析消息失败', { error: e, raw: event.data });
             }

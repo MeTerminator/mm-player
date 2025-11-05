@@ -1,10 +1,9 @@
-
 class MeTMusicPlayer {
     /**
-     * @param {HTMLAudioElement} audioElement - 需要绑定的 HTMLAudioElement 实例。
-     * @param {string} sessionId - 用于 WebSocket 连接的会话 ID。
-     * @param {object} [options] - 可选配置项。
-     * @param {Function} [options.onChange] - 状态变化时的回调函数，传入当前播放器实例。
+     * @param {HTMLAudioElement} audioElement
+     * @param {string} sessionId
+     * @param {object} [options]
+     * @param {Function} [options.onChange]
      */
     constructor(audioElement, sessionId, options = {}) {
         if (!audioElement) {
@@ -16,25 +15,43 @@ class MeTMusicPlayer {
         this.SID = sessionId;
         this.options = options;
         this.onChangeCallback = options.onChange || null;
+
         this.ws = null;
-        this.currentServerStartTime = 0;
-        this.midUrlCache = {};
-        this.midLyricsCache = {};
+
+        // 时间与播放相关
+        this.currentServerStartTime = 0; // ms
+        this.serverLocalTimeDiff = 0; // serverTimeMs - localTimeMs
+
+        // 缓存
+        this.midUrlCache = {};     // { mid: { url, track_info } }
+        this.midLyricsCache = {};  // { mid: lyricsText }
+
+        // 状态
         this.isSeekPending = false;
-        this.musicStatus = false;
+        this.musicStatus = false;  // 是否在播放状态（来自 ws）
         this.musicMid = "";
-        this.lastUpdateTs = 0;
+        this.lastUpdateTs = 0; // 本地最后收到反馈时间
         this.lastMusicMid = "";
         this.lastMusicStartTs = 0;
-        this.syncInterval = null;
-        this.songData = null;
-        this.songLyrics = null;
-        this.isBuffering = false;
-        this.serverLocalTimeDiff = 0;
+
+        // loading metrics
         this.loadingTimes = [];
         this.loadingStartTime = 0;
         this.averageLoadingTime = 1000;
         this.minPreloadTime = 500;
+
+        // intervals
+        this.statusInterval = null; // 用于 ws 状态检查（heartbeat-like）
+        this.syncInterval = null;   // 用于播放期间的时间对齐检测
+
+        // song info
+        this.songData = null;
+        this.songLyrics = null;
+        this.isBuffering = false;
+
+        // throttle trigger onChange
+        this._lastTriggerTs = 0;
+        this._triggerThrottleMs = 200;
 
         this._init();
     }
@@ -44,12 +61,40 @@ class MeTMusicPlayer {
         this._initMediaSession();
     }
 
-    _triggerOnChange() {
-        if (this.onChangeCallback && typeof this.onChangeCallback === 'function') {
-            this.onChangeCallback(this);
+    // ---------- Logging ----------
+    _wsLog(level = 'log', tag = 'WS', msg = '', data = null) {
+        const time = new Date().toISOString();
+        const base = `[${time}] [${tag}] ${msg}`;
+        const css = 'padding:2px 6px; border-radius:3px;';
+
+        if (level === 'log') {
+            console.log(`%c${base}`, `${css}background:#eef; color:#036;`, data ?? '');
+        } else if (level === 'info') {
+            console.info(`%c${base}`, `${css}background:#def; color:#045;`, data ?? '');
+        } else if (level === 'warn') {
+            console.warn(`%c${base}`, `${css}background:#ffd; color:#865200;`, data ?? '');
+        } else if (level === 'error') {
+            console.error(`%c${base}`, `${css}background:#fdd; color:#900;`, data ?? '');
+        } else {
+            console.log(`%c${base}`, `${css}`, data ?? '');
         }
     }
 
+    // ---------- onChange 节流触发 ----------
+    _triggerOnChange(force = false) {
+        if (!this.onChangeCallback || typeof this.onChangeCallback !== 'function') return;
+        const now = Date.now();
+        if (force || now - this._lastTriggerTs >= this._triggerThrottleMs) {
+            this._lastTriggerTs = now;
+            try {
+                this.onChangeCallback(this);
+            } catch (e) {
+                console.error("onChange 回调异常:", e);
+            }
+        }
+    }
+
+    // ---------- 时间格式 ----------
     _formatTime(seconds) {
         if (isNaN(seconds) || seconds < 0) return "0:00";
         const min = Math.floor(seconds / 60);
@@ -57,23 +102,30 @@ class MeTMusicPlayer {
         return `${min}:${sec < 10 ? '0' : ''}${sec}`;
     }
 
+    // ---------- DOM Audio 事件 ----------
     _bindEvents() {
+        // canplay: 播放器有数据可播放 -> 处理 pending seek 和开始播放
         this.audioPlayer.addEventListener('canplay', () => {
             this.isBuffering = false;
             const loadingTime = Date.now() - this.loadingStartTime;
-            if (loadingTime > 0) {
-                this._addLoadingTime(loadingTime);
-            }
+            if (loadingTime > 0) this._addLoadingTime(loadingTime);
+
             if (this.isSeekPending) {
+                // 根据服务器-本地时间差和 currentServerStartTime 计算应该 seek 到的时间（秒）
                 const expectedServerPlayTimeMs = (Date.now() + this.serverLocalTimeDiff) - this.currentServerStartTime;
                 const accurateSeekTime = Math.max(0, expectedServerPlayTimeMs / 1000);
-
-                this.audioPlayer.currentTime = accurateSeekTime;
+                // 保证不超过 duration（如果有）
+                if (!isNaN(this.audioPlayer.duration) && this.audioPlayer.duration > 0) {
+                    this.audioPlayer.currentTime = Math.min(accurateSeekTime, this.audioPlayer.duration);
+                } else {
+                    this.audioPlayer.currentTime = accurateSeekTime;
+                }
                 this.isSeekPending = false;
             }
 
+            // 自动尝试播放（任何自动播放错误都记录）
             this.audioPlayer.play().catch(error => {
-                console.error("播放失败:", error);
+                this._wsLog('warn', 'AUDIO', '播放尝试失败（可能受浏览器策略限制）', error);
             });
 
             this._triggerOnChange();
@@ -83,19 +135,24 @@ class MeTMusicPlayer {
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
             this._triggerOnChange();
         });
+
         this.audioPlayer.addEventListener('pause', () => {
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
             this._triggerOnChange();
         });
+
         this.audioPlayer.addEventListener('waiting', () => {
             this.isBuffering = true;
+            this._triggerOnChange();
         });
+
         this.audioPlayer.addEventListener('ended', () => {
             if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
             this._triggerOnChange();
         });
 
         this.audioPlayer.addEventListener('timeupdate', () => {
+            // 每次 timeupdate 更新 media session position（节制）
             this._updateMediaSessionPositionState();
             this._triggerOnChange();
         });
@@ -104,12 +161,18 @@ class MeTMusicPlayer {
             this._updateMediaSessionPositionState();
             this._triggerOnChange();
         });
+
+        // 可选：监听错误以便更好地定位问题
+        this.audioPlayer.addEventListener('error', (e) => {
+            this._wsLog('error', 'AUDIO', 'audio element error', e);
+        });
     }
 
+    // ---------- Media Session ----------
     _initMediaSession() {
         if ('mediaSession' in navigator) {
             navigator.mediaSession.setActionHandler('play', () => {
-                this.audioPlayer.play().catch(e => console.error("MediaSession Play Error:", e));
+                this.audioPlayer.play().catch(e => this._wsLog('error', 'MediaSession', 'Play Error', e));
             });
             navigator.mediaSession.setActionHandler('pause', () => {
                 this.audioPlayer.pause();
@@ -118,34 +181,42 @@ class MeTMusicPlayer {
     }
 
     _updateMediaSessionMetadata(trackInfo) {
-        if ('mediaSession' in navigator && trackInfo) {
-            let artworkUrl = trackInfo.album?.coverUrl || '';
+        if (!('mediaSession' in navigator)) return;
 
+        if (trackInfo) {
+            let artworkUrl = trackInfo.album?.coverUrl || trackInfo.album?.pic || '';
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: trackInfo.title || '未知歌曲',
                 artist: trackInfo.singer?.map(s => s.name).join(', ') || '未知歌手',
                 album: trackInfo.album?.name || '未知专辑',
-                artwork: [
-                    { src: artworkUrl, sizes: '512x512', type: 'image/jpeg' }
-                ]
+                artwork: artworkUrl ? [{ src: artworkUrl, sizes: '512x512', type: 'image/jpeg' }] : []
             });
+        } else {
+            navigator.mediaSession.metadata = null;
         }
     }
 
     _updateMediaSessionPositionState() {
         if ('mediaSession' in navigator) {
-            if (this.audioPlayer.duration > 0 && this.audioPlayer.currentTime > 0) {
-                navigator.mediaSession.setPositionState({
-                    duration: this.audioPlayer.duration,
-                    playbackRate: this.audioPlayer.playbackRate,
-                    position: this.audioPlayer.currentTime
-                });
+            const dur = this.audioPlayer.duration;
+            const pos = this.audioPlayer.currentTime;
+            if (isFinite(dur) && dur > 0 && isFinite(pos)) {
+                try {
+                    navigator.mediaSession.setPositionState({
+                        duration: dur,
+                        playbackRate: this.audioPlayer.playbackRate,
+                        position: pos
+                    });
+                } catch (e) {
+                    // 某些浏览器对 positionState 有限制，静默处理
+                }
             }
         }
     }
 
+    // ---------- 状态导出 ----------
     getPlayerStatus() {
-        const isAudioPlaying = !this.audioPlayer.paused && !this.audioPlayer.ended;
+        const isAudioPlaying = !this.audioPlayer.paused && !this.audioPlayer.ended && !this.isBuffering;
         let statusText = '正在初始化...';
 
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
@@ -163,7 +234,7 @@ class MeTMusicPlayer {
         return {
             isPlaying: isAudioPlaying,
             songMid: this.musicMid,
-            startTime: this.currentServerStartTime,
+            startTime: this.currentServerStartTime, // ms
             songDetails: this.songData,
             currentTime: this.audioPlayer.currentTime,
             duration: this.audioPlayer.duration,
@@ -176,67 +247,104 @@ class MeTMusicPlayer {
         };
     }
 
+    // ---------- loading time avg ----------
     _addLoadingTime(timeInMs) {
         this.loadingTimes.push(timeInMs);
-        if (this.loadingTimes.length > 5) {
-            this.loadingTimes.shift();
-        }
+        if (this.loadingTimes.length > 8) this.loadingTimes.shift();
         const sum = this.loadingTimes.reduce((a, b) => a + b, 0);
         this.averageLoadingTime = sum / this.loadingTimes.length;
-        console.log(`平均加载时间: ${this.averageLoadingTime.toFixed(2)}ms`);
+        this._wsLog('info', 'METRIC', `平均加载时间: ${this.averageLoadingTime.toFixed(0)}ms`);
     }
 
+    // ---------- WebSocket 管理 ----------
     connectWebSocket() {
         const wsUrl = "wss://music.met6.top:444/api-client/ws/listen";
-        this.ws = new WebSocket(wsUrl);
+        try {
+            this.ws = new WebSocket(wsUrl);
+        } catch (e) {
+            this._wsLog('error', 'WS', 'WebSocket 构造失败', e);
+            return;
+        }
 
         this.ws.onopen = () => {
-            this.ws.send(JSON.stringify({ type: "time" }));
-            this.ws.send(JSON.stringify({ type: "listen", SessionId: [this.SID] }));
-            if (!this.syncInterval) {
-                this.syncInterval = setInterval(() => this._statusCheck(), 1000);
+            this._wsLog('info', 'WS', '连接已打开', { url: wsUrl });
+            this._sendWs({ type: "time" });
+            this._sendWs({ type: "listen", SessionId: [this.SID] });
+
+            // statusInterval 用于定期检查是否超时（如超过 12s 无更新则认为暂停）
+            if (!this.statusInterval) {
+                this.statusInterval = setInterval(() => this._statusCheck(), 1000);
             }
-            this._triggerOnChange();
+            this._triggerOnChange(true);
         };
 
         this.ws.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
+                this._wsLog('log', 'WS:R', '收到消息', data);
 
                 if (data.type === "time" && data.status === "ok" && typeof data.timestamp === 'number') {
                     const serverTimeMs = data.timestamp;
                     const localTimeMs = Date.now();
                     this.serverLocalTimeDiff = serverTimeMs - localTimeMs;
-                    console.log(`时间同步成功。服务器时间与本地时间偏差: ${this.serverLocalTimeDiff}ms`);
+                    this._wsLog('info', 'SYNC', `时间同步成功，server-local diff: ${this.serverLocalTimeDiff}ms`);
                 }
 
-                if (data.type === "feedback" && data.SessionId === this.SID) {
-                    this.musicStatus = data.data.status;
-                    this.musicMid = data.data.songMid;
-                    const musicStartTs = data.data.systemTime - data.data.currentTime * 1000;
+                if (data.type === "feedback" && data.SessionId === this.SID && data.data) {
+                    // 更新 lastUpdateTs
                     this.lastUpdateTs = Date.now();
 
-                    this._updateMusicStatus(this.musicStatus, this.musicMid, musicStartTs);
+                    const payload = data.data;
+                    const newStatus = payload.status;
+                    const newMid = payload.songMid || "";
+                    const musicStartTs = payload.systemTime - (payload.currentTime || 0) * 1000;
+
+                    this.musicStatus = newStatus;
+                    this.musicMid = newMid;
+
+                    this._updateMusicStatus(newStatus, newMid, musicStartTs);
                 }
             } catch (e) {
-                console.error("解析消息失败:", e);
+                this._wsLog('error', 'WS', '解析消息失败', { error: e, raw: event.data });
             }
         };
 
-        this.ws.onclose = () => {
-            clearInterval(this.syncInterval);
-            this.syncInterval = null;
-            setTimeout(() => this.connectWebSocket(), 5000);
-            this._triggerOnChange();
+        this.ws.onclose = (ev) => {
+            this._wsLog('warn', 'WS', '连接已关闭，尝试重连', ev);
+            // 清理 interval
+            if (this.statusInterval) {
+                clearInterval(this.statusInterval);
+                this.statusInterval = null;
+            }
+            if (this.syncInterval) {
+                clearInterval(this.syncInterval);
+                this.syncInterval = null;
+            }
+            // 重连（指数退避等可按需加入）
+            setTimeout(() => this.connectWebSocket(), 3000);
+            this._triggerOnChange(true);
         };
 
         this.ws.onerror = (error) => {
-            console.error("WebSocket Error:", error);
+            this._wsLog('error', 'WS', 'WebSocket 错误', error);
             this._triggerOnChange();
         };
     }
 
+    _sendWs(obj) {
+        try {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify(obj));
+                this._wsLog('log', 'WS:S', '发送消息', obj);
+            }
+        } catch (e) {
+            this._wsLog('error', 'WS', '发送消息失败', e);
+        }
+    }
+
+    // ---------- 处理播放状态变更 ----------
     _updateMusicStatus(currentStatus, currentMid, currentStartTs) {
+        // currentStartTs 单位：ms
         if (currentStatus) {
             const isNewSong = currentMid !== this.lastMusicMid;
             const isTimeDrifted = Math.abs(currentStartTs - this.lastMusicStartTs) > 500;
@@ -245,132 +353,202 @@ class MeTMusicPlayer {
             this.lastMusicMid = currentMid;
 
             if (isNewSong || isTimeDrifted) {
-                const shouldPlayTime = currentStartTs;
+                // 计算预加载与延迟（尽量在歌曲播放前加载完）
                 const preloadTime = Math.max(this.averageLoadingTime, this.minPreloadTime);
-                const targetLoadFinishTimeServer = shouldPlayTime - this.minPreloadTime;
-                const delay = Math.max(0, (targetLoadFinishTimeServer - this.serverLocalTimeDiff) - Date.now());
+                const targetLoadFinishTimeServer = currentStartTs - preloadTime;
+                // 目标本地时间 = targetLoadFinishTimeServer - serverLocalTimeDiff
+                const targetLocalFinish = targetLoadFinishTimeServer - this.serverLocalTimeDiff;
+                const delay = Math.max(0, targetLocalFinish - Date.now());
 
-                console.log(`[预加载] 目标服务器播放时间: ${shouldPlayTime}ms, 预加载时长 ${preloadTime.toFixed(0)}ms, 计划本地延迟加载: ${delay.toFixed(0)}ms`);
+                this._wsLog('info', 'PRELOAD', `新歌或时间变化：mid=${currentMid}, startTs=${currentStartTs}, preload=${preloadTime}ms, delayLocal=${Math.round(delay)}ms`);
 
-                setTimeout(() => {
-                    this._prepareToPlay(currentMid, currentStartTs);
-                }, delay);
+                // 延迟执行预加载（延迟为 0 时立刻执行）
+                setTimeout(() => this._prepareToPlay(currentMid, currentStartTs), delay);
             }
         } else {
+            // 暂停/停止
             this._handlePause();
         }
-        this._triggerOnChange();
+
+        this._triggerOnChange(true);
     }
 
     _statusCheck() {
+        // 若超过 12s 未收到服务器反馈，则判定停止播放状态
         if (this.musicStatus && (Date.now() - this.lastUpdateTs > 12000)) {
+            this._wsLog('warn', 'STATUS', '超过 12s 未收到更新，设为暂停状态');
             this.musicStatus = false;
             this._updateMusicStatus(false, "", 0);
         }
         this._triggerOnChange();
     }
 
-    _updateSongInfo(trackInfo) {
-        if (trackInfo) {
-            this._updateMediaSessionMetadata(trackInfo);
-        } else {
-            if ('mediaSession' in navigator) {
-                navigator.mediaSession.metadata = null;
-            }
-        }
-        this._triggerOnChange();
-    }
-
+    // ---------- 获取歌曲 URL / 歌词（含缓存） ----------
     async _getSongUrl(mid) {
-        if (this.midLyricsCache[mid]) return this.midLyricsCache[mid];
+        if (!mid) return "";
+        if (this.midUrlCache[mid] && this.midUrlCache[mid].url) {
+            return this.midUrlCache[mid].url;
+        }
         try {
             const response = await fetch(`https://music.met6.top:444/api/song/url/v1/?id=${mid}&level=hq`);
             const data = await response.json();
-            this.songData = data;
-            const url = data.data[0]?.url;
-            if (url) {
-                this.midUrlCache[mid] = {
-                    url: url,
-                    track_info: data.data[0]?.track_info
-                };
-                return url;
+            // data.data[0] 包含 url 与 track_info
+            const entry = data.data?.[0] || null;
+            const url = entry?.url || "";
+            const track_info = entry?.track_info || entry?.track || null;
+            this.midUrlCache[mid] = {
+                url: url,
+                track_info: track_info
+            };
+            // 保持 songData 的基本信息（不覆盖现有 lyrics）
+            if (!this.songData || this.songData.mid !== mid) {
+                this.songData = { mid, ...entry };
+            } else {
+                // 合并避免覆盖 lyrics
+                this.songData = Object.assign({}, this.songData, entry);
             }
-            return "";
+            return url;
         } catch (e) {
-            console.error("获取歌曲链接失败:", e);
+            this._wsLog('error', 'FETCH', '获取歌曲链接失败', e);
             return "";
         }
     }
 
     async _getSongLyrics(mid) {
-        if (this.midLyricsCache[mid]) return this.midLyricsCache[mid].url;
+        if (!mid) return "";
+        if (this.midLyricsCache[mid]) return this.midLyricsCache[mid];
         try {
             const response = await fetch(`https://music.met6.top:444/api/songlyric_get.php?show=lyric&mid=${mid}`);
             const lyrics = await response.text();
-            this.songLyrics = lyrics;
             this.midLyricsCache[mid] = lyrics;
+            // 也更新当前 songData（如果匹配）
+            if (this.songData && this.songData.mid === mid) {
+                this.songData.lyrics = lyrics;
+            }
             return lyrics;
         } catch (e) {
-            console.error("获取歌曲歌词失败:", e);
-            this.songLyrics = "";
+            this._wsLog('error', 'FETCH', '获取歌词失败', e);
             return "";
         }
     }
 
-    async _prepareToPlay(mid, startTime) {
-        this.isBuffering = true;
-
-        const cachedData = this.midUrlCache[mid];
-        let songUrl;
-        let trackInfo;
-
-        if (cachedData) {
-            songUrl = cachedData.url;
-            trackInfo = cachedData.track_info;
-        } else {
-            const fetchedUrl = await this._getSongUrl(mid);
-            songUrl = fetchedUrl;
-            trackInfo = this.midUrlCache[mid]?.track_info;
-            this.songData.lyrics = await this._getSongLyrics(mid);
+    // ---------- 预加载并准备播放 ----------
+    async _prepareToPlay(mid, startTimeMs) {
+        if (!mid) {
+            this._wsLog('warn', 'PREPARE', '没有提供 mid，取消准备播放');
+            return;
         }
 
-        if (songUrl) {
+        this.isBuffering = true;
+        this.loadingStartTime = Date.now();
+
+        // 先尝试从缓存或网络获取 url 与 track info
+        let cached = this.midUrlCache[mid];
+        let songUrl = cached?.url || "";
+        let trackInfo = cached?.track_info || null;
+
+        if (!songUrl) {
+            songUrl = await this._getSongUrl(mid);
+            // trackInfo 可能已经被写入 cache
+            trackInfo = this.midUrlCache[mid]?.track_info || trackInfo;
+        }
+
+        // 并行请求歌词（非阻塞）
+        this._getSongLyrics(mid).then(ly => {
+            this.songLyrics = ly;
+            this._triggerOnChange();
+        });
+
+        if (!songUrl) {
+            this.isBuffering = false;
+            this._wsLog('error', 'PREPARE', `无法获取歌曲 URL，mid=${mid}`);
+            this._updateSongInfo(null);
+            return;
+        }
+
+        // 变更音源，load -> canplay 会触发 seek/play
+        try {
+            // 暂停并替换 src
             this.audioPlayer.pause();
-            this.audioPlayer.src = songUrl;
+            // 避免重复赋值导致 load 触发问题
+            if (this.audioPlayer.src !== songUrl) {
+                this.audioPlayer.src = songUrl;
+            }
             this.audioPlayer.load();
 
-            this.currentServerStartTime = startTime;
-            this._updateSongInfo(trackInfo);
+            // 更新 server-start-time（ms）
+            this.currentServerStartTime = startTimeMs;
+            this.musicMid = mid;
 
+            // 更新 media session metadata（只在 trackInfo 可用时）
+            if (trackInfo) {
+                this._updateSongInfo(trackInfo);
+            } else {
+                // 若还没 trackInfo，也可以尝试在 cache 中查找
+                const cached2 = this.midUrlCache[mid];
+                if (cached2?.track_info) {
+                    this._updateSongInfo(cached2.track_info);
+                } else {
+                    // 清空 metadata（若没有信息）
+                    this._updateSongInfo(null);
+                }
+            }
+
+            // 标记需要在 canplay 时 seek
             this.isSeekPending = true;
-            this.loadingStartTime = Date.now();
 
-            clearInterval(this.syncInterval);
+            // 重置并启动播放时的同步检测 interval（syncInterval）
+            if (this.syncInterval) {
+                clearInterval(this.syncInterval);
+                this.syncInterval = null;
+            }
             this.syncInterval = setInterval(() => this._checkAndSync(), 1000);
-        } else {
+        } catch (e) {
+            this._wsLog('error', 'PREPARE', '设置音源或加载失败', e);
             this.isBuffering = false;
-            this._updateSongInfo(null);
+            this._triggerOnChange();
         }
+
         this._triggerOnChange();
     }
 
+    _updateSongInfo(trackInfo) {
+        // trackInfo 可能为 null（清除 metadata）
+        this.songData = Object.assign({}, this.songData || {}, trackInfo ? { track_info: trackInfo } : {});
+        this._updateMediaSessionMetadata(trackInfo);
+        this._triggerOnChange();
+    }
+
+    // ---------- 处理暂停/停止 ----------
     _handlePause() {
-        this.audioPlayer.pause();
-        this.isBuffering = false;
-        this.audioPlayer.src = "";
-        this.audioPlayer.load();
+        try {
+            this.audioPlayer.pause();
+            this.isBuffering = false;
+            // 清除 src（避免继续占用网络）
+            if (this.audioPlayer.src) {
+                this.audioPlayer.src = "";
+                this.audioPlayer.load();
+            }
 
-        if ('mediaSession' in navigator) {
-            navigator.mediaSession.metadata = null;
-            navigator.mediaSession.playbackState = 'paused';
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.metadata = null;
+                navigator.mediaSession.playbackState = 'paused';
+            }
+        } catch (e) {
+            this._wsLog('error', 'PAUSE', '暂停处理异常', e);
         }
 
-        clearInterval(this.syncInterval);
-        this.syncInterval = null;
+        if (this.syncInterval) {
+            clearInterval(this.syncInterval);
+            this.syncInterval = null;
+        }
+        // statusInterval 不在这里清除，保持 ws 状态检查继续运行
         this._triggerOnChange();
     }
 
+    // ---------- 播放时校准 ----------
     _checkAndSync() {
+        // 仅当确实在播放且已加载好音源时才校准
         if (!this.musicStatus || !this.audioPlayer.src || this.audioPlayer.paused || this.audioPlayer.ended || this.isBuffering) {
             return;
         }
@@ -382,52 +560,70 @@ class MeTMusicPlayer {
         const timeDiff = Math.abs(expectedTimeSeconds - actualTime);
 
         if (timeDiff > 0.5) {
-            console.warn(`检测到时间偏差：${timeDiff.toFixed(2)}s。正在重新同步。`);
-            this.audioPlayer.currentTime = expectedTimeSeconds;
+            this._wsLog('warn', 'SYNC', `检测到时间差 ${timeDiff.toFixed(2)}s，正在同步到 ${expectedTimeSeconds.toFixed(2)}s`);
+            try {
+                // 尝试平滑跳转：当偏差很大直接设置
+                this.audioPlayer.currentTime = expectedTimeSeconds;
+            } catch (e) {
+                this._wsLog('error', 'SYNC', '调整 currentTime 失败', e);
+            }
         }
         this._triggerOnChange();
     }
 
-    // --- 导出方法 ---
-
-    /** 启动播放器，连接 WebSocket */
+    // ---------- 外部方法 ----------
     start() {
         if (!this.ws || this.ws.readyState === WebSocket.CLOSED || this.ws.readyState === WebSocket.CLOSING) {
             this.connectWebSocket();
+        } else {
+            this._wsLog('info', 'START', 'WebSocket 已处于打开状态');
         }
     }
 
-    /** 停止播放并断开连接 */
     stop() {
         this._handlePause();
         if (this.ws) {
-            this.ws.close();
+            try {
+                this.ws.close();
+            } catch (e) {
+                // ignore
+            }
             this.ws = null;
         }
-        clearInterval(this.syncInterval);
-        this.syncInterval = null;
+        if (this.statusInterval) {
+            clearInterval(this.statusInterval);
+            this.statusInterval = null;
+        }
+        if (this.syncInterval) {
+            clearInterval(this.syncInterval);
+            this.syncInterval = null;
+        }
+        this._triggerOnChange(true);
     }
 
-    /** 供外部控制播放/暂停 */
     togglePlayPause() {
         if (this.audioPlayer.paused) {
-            this.audioPlayer.play().catch(e => console.error("Play failed:", e));
+            this.audioPlayer.play().catch(e => this._wsLog('error', 'PLAY', 'Play failed', e));
         } else {
             this.audioPlayer.pause();
         }
         this._triggerOnChange();
     }
 
-    /** 供外部控制音量 */
     setVolume(volume) {
-        this.audioPlayer.volume = volume;
+        this.audioPlayer.volume = Math.max(0, Math.min(1, volume));
         if (volume > 0) { this.audioPlayer.muted = false; }
         this._triggerOnChange();
     }
 
-    /** 供外部控制进度条拖拽 */
     seekTo(timeInSeconds) {
-        this.audioPlayer.currentTime = timeInSeconds;
+        try {
+            // 手动 seek 时清除 isSeekPending
+            this.isSeekPending = false;
+            this.audioPlayer.currentTime = Math.max(0, timeInSeconds);
+        } catch (e) {
+            this._wsLog('error', 'SEEK', '手动 seek 失败', e);
+        }
         this._triggerOnChange();
     }
 }

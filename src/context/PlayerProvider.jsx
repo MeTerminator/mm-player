@@ -46,7 +46,7 @@ export const PlayerProvider = ({ children }) => {
         const audioEl = playerInstance.audioPlayer;
 
         const currentPlayerRef = playerRef.current;
-        const songCoverPmid = currentPlayerRef?.songData?.data?.[0]?.track_info?.album?.pmid;
+        const songCoverPmid = currentPlayerRef?.songData?.track_info?.album?.pmid;
 
         // 仅在歌曲/歌词数据改变时才重新解析 LRC
         const newSongLrc = currentPlayerRef?.songData?.lyrics || '';
@@ -59,9 +59,9 @@ export const PlayerProvider = ({ children }) => {
         setPlayerState(prevState => ({
             ...prevState,
             isPlaying: state.isPlaying,
-            songName: currentPlayerRef?.songData?.data?.[0]?.track_info?.title || '',
-            songSinger: currentPlayerRef?.songData?.data?.[0]?.track_info?.singer?.map(s => s.title).join(' / ') || '-',
-            songAlbum: currentPlayerRef?.songData?.data?.[0]?.track_info?.album.title || '-',
+            songName: currentPlayerRef?.songData?.track_info?.title || '',
+            songSinger: currentPlayerRef?.songData?.track_info?.singer?.map(s => s.title).join(' / ') || '-',
+            songAlbum: currentPlayerRef?.songData?.track_info?.album.title || '-',
             songCoverPmid: songCoverPmid,
             songCoverUrl: songCoverPmid ? `https://y.qq.com/music/photo_new/T002R800x800M000${songCoverPmid}.jpg` : '',
             songMid: state.songMid,

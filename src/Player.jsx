@@ -3,11 +3,7 @@ import Visualizer from './components/Visualizer/Visualizer';
 import MainText from './components/MainText/MainText';
 import SongInfo from './components/SongInfo/SongInfo';
 
-
-
 function Player() {
-
-
     return (
         <>
             <Background />

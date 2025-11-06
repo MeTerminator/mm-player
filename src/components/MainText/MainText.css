@@ -87,7 +87,7 @@
 
 /* 基础竖屏体验 */
 
-@media (max-width: 760px) {
+@media (max-width: 760px) or (max-height: 600px) {
   .maintext-lyrics {
     font-size: 3em;
   }

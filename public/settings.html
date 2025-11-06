@@ -93,18 +93,8 @@
     <h1>MeT-Music Player</h1>
 
     <div class="form-group">
-        <label for="sid">sid:</label>
+        <label for="sid">Session ID</label>
         <input type="text" id="sid" name="sid">
-    </div>
-
-    <div class="form-group">
-        <label for="adcode">adcode:</label>
-        <input type="text" id="adcode" name="adcode">
-    </div>
-
-    <div class="form-group">
-        <label for="curriculum_api">curriculum_api:</label>
-        <input type="text" id="curriculum_api" name="curriculum_api">
     </div>
 
     <div class="buttons">
@@ -116,7 +106,7 @@
 </div>
 
 <script>
-    const keys = ['sid', 'adcode', 'curriculum_api'];
+    const keys = ['sid'];
     const inputs = {};
     keys.forEach(key => {
         inputs[key] = document.getElementById(key);

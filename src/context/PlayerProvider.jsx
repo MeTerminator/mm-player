@@ -38,7 +38,6 @@ export const PlayerProvider = ({ children }) => {
     });
 
     // ==================== 核心状态更新逻辑 (稳定化) ====================
-
     const handlePlayerStateChange = useCallback((playerInstance) => {
         if (!playerInstance || !playerInstance.audioPlayer) return;
 
@@ -46,22 +45,24 @@ export const PlayerProvider = ({ children }) => {
         const audioEl = playerInstance.audioPlayer;
 
         const currentPlayerRef = playerRef.current;
-        const songCoverPmid = currentPlayerRef?.songData?.track_info?.album?.pmid;
+        // 优先使用 playerInstance.songLyrics（prepareToPlay 会设置），否则回退到 songData.lyrics
+        const lyricFromPlayer = currentPlayerRef?.songLyrics || currentPlayerRef?.songData?.lyrics || '';
+        const songCoverPmid = currentPlayerRef?.songData?.track_info?.album?.pmid || '';
 
         // 仅在歌曲/歌词数据改变时才重新解析 LRC
-        const newSongLrc = currentPlayerRef?.songData?.lyrics || '';
+        const newSongLrc = lyricFromPlayer;
         const prevSongLrc = playerStateRef.current?.songLrc || '';
 
         if (newSongLrc !== prevSongLrc) {
-            parsedLyricsRef.current = parseLrc(newSongLrc);
+            parsedLyricsRef.current = parseLrc(newSongLrc || '');
         }
 
         setPlayerState(prevState => ({
             ...prevState,
             isPlaying: state.isPlaying,
             songName: currentPlayerRef?.songData?.track_info?.title || '',
-            songSinger: currentPlayerRef?.songData?.track_info?.singer?.map(s => s.title).join(' / ') || '-',
-            songAlbum: currentPlayerRef?.songData?.track_info?.album.title || '-',
+            songSinger: currentPlayerRef?.songData?.track_info?.singer?.map(s => s.name || s.title).join(' / ') || '-',
+            songAlbum: currentPlayerRef?.songData?.track_info?.album?.name || '-',
             songCoverPmid: songCoverPmid,
             songCoverUrl: songCoverPmid ? `https://y.qq.com/music/photo_new/T002R800x800M000${songCoverPmid}.jpg` : '',
             songMid: state.songMid,
@@ -77,9 +78,7 @@ export const PlayerProvider = ({ children }) => {
         }));
     }, []); // 无外部依赖，因为它使用了 ref 和稳定的 setPlayerState
 
-
     // ==================== 播放器初始化 (确保只执行一次) ====================
-
     useEffect(() => {
         const audioElement = audioRef.current;
 
@@ -102,23 +101,59 @@ export const PlayerProvider = ({ children }) => {
         }
     }, [handlePlayerStateChange]); // 依赖 handlePlayerStateChange
 
+    // 把最新 playerState 同步到 ref（非常重要）
+    useEffect(() => {
+        playerStateRef.current = playerState;
+    }, [playerState]);
+
+    // ==================== 当 songMid 变化时，主动获取歌词（若缓存未命中则调用实例方法） ====================
+    useEffect(() => {
+        const mid = playerState.songMid;
+        if (!mid || !playerRef.current) return;
+
+        let cancelled = false;
+        const player = playerRef.current;
+
+        // 优先使用播放器内部缓存（midLyricsCache）或 player.songLyrics
+        const cached = (player.midLyricsCache && player.midLyricsCache[mid]) || player.songLyrics;
+        if (cached) {
+            const ly = typeof cached === 'string' ? cached : String(cached);
+            parsedLyricsRef.current = parseLrc(ly || '');
+            // 更新 state 中的 songLrc（保证界面有歌词文本）
+            setPlayerState(prev => ({ ...prev, songLrc: ly }));
+            return;
+        }
+
+        // 否则调用实例的 _getSongLyrics（它返回 Promise）
+        // 注意：_getSongLyrics 是私有方法，但在当前上下文可用，我们调用它以确保歌词获取
+        player._getSongLyrics(mid).then(ly => {
+            if (cancelled) return;
+            const txt = ly || '';
+            parsedLyricsRef.current = parseLrc(txt);
+            setPlayerState(prev => ({ ...prev, songLrc: txt }));
+        }).catch(e => {
+            // 忽略错误，但记录日志（若 player 有日志方法可用）
+            try { player._wsLog && player._wsLog('warn', 'LYRIC', '获取歌词失败', e); } catch {}
+        });
+
+        return () => { cancelled = true; };
+    }, [playerState.songMid]);
 
     // ==================== Audio 时间事件监听 (高频更新) ====================
-
     useEffect(() => {
         const audio = audioRef.current;
         if (!audio) return;
 
         const handleTimeUpdate = () => {
-            if (!playerRef.current || !audio.currentTime) return;
+            if (!playerRef.current) return;
 
-            const currentTime = audio.currentTime;
+            const currentTime = audio.currentTime || 0;
             const formattedTime = playerRef.current?._formatTime(currentTime) || '0:00';
             let currentLineText = '';
-            const lyrics = parsedLyricsRef.current;
+            const lyrics = parsedLyricsRef.current || [];
 
             if (lyrics.length > 0) {
-                let foundLine = lyrics[lyrics.length - 1];
+                let foundLine = lyrics[0] || { text: '' };
                 for (let i = 0; i < lyrics.length; i++) {
                     if ((currentTime + 0.3) >= lyrics[i].time) {
                         foundLine = lyrics[i];
@@ -126,7 +161,7 @@ export const PlayerProvider = ({ children }) => {
                         break;
                     }
                 }
-                currentLineText = foundLine.text;
+                currentLineText = foundLine.text || '';
             }
 
             setPlayerState(prev => ({
@@ -156,9 +191,7 @@ export const PlayerProvider = ({ children }) => {
         };
     }, []); // 依赖空数组，只在挂载/卸载时执行
 
-
     // ==================== 暴露给外部的函数/值 ====================
-
     const togglePlayback = useCallback(() => {
         const isWsOpen = playerRef.current?.ws?.readyState === WebSocket.OPEN;
         const currentState = playerStateRef.current;
@@ -168,7 +201,12 @@ export const PlayerProvider = ({ children }) => {
         if (!isWsOpen && !isCurrentlyPlaying) return;
 
         if (isAlwaysPlaying && !isCurrentlyPlaying) {
-            playerRef.current?.play();
+            // 在 MeTMusicPlayer 中可能没有 play 方法（保持向后兼容）
+            if (typeof playerRef.current.play === 'function') {
+                playerRef.current.play();
+            } else {
+                playerRef.current?.audioPlayer?.play?.().catch(() => {});
+            }
         } else if (isAlwaysPlaying && isCurrentlyPlaying) {
             console.log('持续播放已启用，无法暂停');
         }
@@ -179,7 +217,11 @@ export const PlayerProvider = ({ children }) => {
 
     const seekTo = useCallback((time) => {
         if (audioRef.current && playerRef.current) {
-            audioRef.current.currentTime = time;
+            try {
+                audioRef.current.currentTime = time;
+            } catch (e) {
+                // 某些浏览器/时序下会抛错，忽略
+            }
         }
     }, []);
 
@@ -198,7 +240,7 @@ export const PlayerProvider = ({ children }) => {
 
             if (audio && audio.paused && currentState?.songMid) {
                 console.log('检测到用户点击，尝试恢复播放...');
-                audio.play();
+                audio.play().catch(() => {});
             }
         };
 

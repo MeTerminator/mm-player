@@ -233,7 +233,7 @@ class MeTMusicPlayer {
 
         return {
             isPlaying: isAudioPlaying,
-            songMid: this.musicMid,
+            songMid: this.currentSongMid || this.songData?.track_info?.mid || '',
             startTime: this.currentServerStartTime, // ms
             songDetails: this.songData,
             currentTime: this.audioPlayer.currentTime,
@@ -442,7 +442,8 @@ class MeTMusicPlayer {
     }
 
     // ---------- 预加载并准备播放 ----------
-    async _prepareToPlay(mid, startTimeMs) {
+    // Safari 兼容性修复点
+    _prepareToPlay(mid, startTimeMs) {
         if (!mid) {
             this._wsLog('warn', 'PREPARE', '没有提供 mid，取消准备播放');
             return;
@@ -451,74 +452,80 @@ class MeTMusicPlayer {
         this.isBuffering = true;
         this.loadingStartTime = Date.now();
 
-        // 先尝试从缓存或网络获取 url 与 track info
-        let cached = this.midUrlCache[mid];
-        let songUrl = cached?.url || "";
-        let trackInfo = cached?.track_info || null;
+        const audio = this.audioPlayer;
 
-        if (!songUrl) {
-            songUrl = await this._getSongUrl(mid);
-            // trackInfo 可能已经被写入 cache
-            trackInfo = this.midUrlCache[mid]?.track_info || trackInfo;
-        }
-
-        // 并行请求歌词（非阻塞）
-        this._getSongLyrics(mid).then(ly => {
-            this.songLyrics = ly;
-            this._triggerOnChange();
-        });
-
-        if (!songUrl) {
-            this.isBuffering = false;
-            this._wsLog('error', 'PREPARE', `无法获取歌曲 URL，mid=${mid}`);
-            this._updateSongInfo(null);
-            return;
-        }
-
-        // 变更音源，load -> canplay 会触发 seek/play
+        // --- Safari 修复补丁 1: 重置状态 ---
+        audio.autoplay = false;
+        audio.preload = "auto";
+        audio.muted = true; // Safari 允许静音自动播放
+        audio.pause();
         try {
-            // 暂停并替换 src
-            this.audioPlayer.pause();
-            // 避免重复赋值导致 load 触发问题
-            if (this.audioPlayer.src !== songUrl) {
-                this.audioPlayer.src = songUrl;
+            audio.removeAttribute('src');
+            audio.load();
+        } catch (e) {
+            this._wsLog('warn', 'SAFARI', '重置 src 失败', e);
+        }
+
+        // 延迟 50ms，避免 Safari load bug
+        setTimeout(async () => {
+            let songUrl = await this._getSongUrl(mid);
+            if (!songUrl) {
+                this._wsLog('error', 'PREPARE', `无法获取歌曲 URL: ${mid}`);
+                this.isBuffering = false;
+                return;
             }
-            this.audioPlayer.load();
 
-            // 更新 server-start-time（ms）
-            this.currentServerStartTime = startTimeMs;
-            this.musicMid = mid;
-
-            // 更新 media session metadata（只在 trackInfo 可用时）
-            if (trackInfo) {
-                this._updateSongInfo(trackInfo);
-            } else {
-                // 若还没 trackInfo，也可以尝试在 cache 中查找
-                const cached2 = this.midUrlCache[mid];
-                if (cached2?.track_info) {
-                    this._updateSongInfo(cached2.track_info);
-                } else {
-                    // 清空 metadata（若没有信息）
-                    this._updateSongInfo(null);
+            // --- Safari 修复补丁 2: Blob 加载避免卡顿 ---
+            let finalUrl = songUrl;
+            if (/^https?:/.test(songUrl) && /^((?!chrome|firefox).)*safari/i.test(navigator.userAgent)) {
+                try {
+                    const resp = await fetch(songUrl, { cache: "no-store" });
+                    const blob = await resp.blob();
+                    finalUrl = URL.createObjectURL(blob);
+                    this._wsLog('info', 'SAFARI', '使用 Blob URL 播放');
+                } catch (e) {
+                    this._wsLog('warn', 'SAFARI', 'Blob 加载失败，退回直接 URL', e);
                 }
             }
 
-            // 标记需要在 canplay 时 seek
+            audio.src = finalUrl;
+            audio.load();
+
+            this.currentServerStartTime = startTimeMs;
+            this.musicMid = mid;
             this.isSeekPending = true;
 
-            // 重置并启动播放时的同步检测 interval（syncInterval）
-            if (this.syncInterval) {
-                clearInterval(this.syncInterval);
-                this.syncInterval = null;
-            }
-            this.syncInterval = setInterval(() => this._checkAndSync(), 1000);
-        } catch (e) {
-            this._wsLog('error', 'PREPARE', '设置音源或加载失败', e);
-            this.isBuffering = false;
-            this._triggerOnChange();
-        }
+            // --- Safari 修复补丁 3: 保证 loadeddata 后再播放 ---
+            const onLoaded = async () => {
+                audio.removeEventListener('loadeddata', onLoaded);
+                this.isBuffering = false;
+                try {
+                    await audio.play();
+                } catch (e) {
+                    this._wsLog('warn', 'SAFARI', 'play() 延迟重试', e);
+                    setTimeout(() => audio.play().catch(() => { }), 80);
+                }
 
-        this._triggerOnChange();
+                // Safari seek 修复
+                if (this.isSeekPending) {
+                    const expectedServerPlayTimeMs = (Date.now() + this.serverLocalTimeDiff) - this.currentServerStartTime;
+                    const accurateSeekTime = Math.max(0, expectedServerPlayTimeMs / 1000);
+                    const trySeek = (count = 0) => {
+                        if (count > 3) return;
+                        audio.currentTime = accurateSeekTime;
+                        requestAnimationFrame(() => {
+                            if (Math.abs(audio.currentTime - accurateSeekTime) > 0.3)
+                                trySeek(count + 1);
+                        });
+                    };
+                    trySeek();
+                    this.isSeekPending = false;
+                }
+
+                audio.muted = false; // 恢复声音
+            };
+            audio.addEventListener('loadeddata', onLoaded, { once: true });
+        }, 50);
     }
 
     _updateSongInfo(trackInfo) {

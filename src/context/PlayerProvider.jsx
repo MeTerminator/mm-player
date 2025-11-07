@@ -10,32 +10,128 @@ const SESSION_ID = getLocalStorageItem('sid') || "";
 // 自动播放
 const alwaysPlaying = true;
 
+const INITIAL_PLAYER_STATE = {
+    isPlaying: false,
+    songName: '',
+    songSinger: '',
+    songAlbum: '',
+    songCoverPmid: '',
+    songCoverUrl: '',
+    songMid: '',
+    songLrc: '',
+    statusText: '未连接',
+    currentTime: '0:00',
+    duration: '0:00',
+    currentLyrics: '',
+    volume: 1.0,
+    isBuffering: false,
+    progressMax: 100, // 默认值
+    progressValue: 0, // 默认值
+    isWsOpen: false,
+    alwaysPlaying: alwaysPlaying,
+};
+
+// **==================== Media Session 设置函数 ====================**
+/**
+ * 设置 Media Session 的元数据（曲名、歌手、封面）和操作。
+ * 仅在浏览器支持 `navigator.mediaSession` 时执行。
+ * @param {object} state - 当前播放器状态
+ * @param {object} player - 播放器实例引用
+ */
+const setupMediaSession = (state, player) => {
+    if ('mediaSession' in navigator) {
+        const { songName, songSinger, songAlbum, songCoverUrl, isPlaying } = state;
+
+        // 1. 设置元数据 (保持不变)
+        if (songName) {
+            navigator.mediaSession.metadata = new MediaMetadata({
+                title: songName || '未知歌曲',
+                artist: songSinger || '未知歌手',
+                album: songAlbum || '未知专辑',
+                artwork: songCoverUrl ? [{ src: songCoverUrl, sizes: '512x512', type: 'image/jpeg' }] : [],
+            });
+        }
+
+        // 2. 设置播放状态 (保持不变)
+        if (navigator.mediaSession.playbackState) {
+            navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+        }
+
+        // 3. 设置操作处理 (保持不变)
+        const actions = ['play', 'pause', 'previoustrack', 'nexttrack', 'seekbackward', 'seekforward', 'seekto'];
+        actions.forEach(action => {
+            try {
+                navigator.mediaSession.setActionHandler(action, null);
+            } catch {
+                // 忽略不支持的操作类型
+            }
+        });
+
+        // 播放/暂停
+        navigator.mediaSession.setActionHandler('play', () => {
+            player?.audioPlayer?.play?.().catch(() => { });
+        });
+
+        navigator.mediaSession.setActionHandler('pause', () => {
+            player?.audioPlayer?.pause?.();
+        });
+
+        if (player) {
+            navigator.mediaSession.setActionHandler('previoustrack', () => {
+                player.prev?.();
+            });
+
+            navigator.mediaSession.setActionHandler('nexttrack', () => {
+                player.next?.();
+            });
+        }
+
+        navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+            const seekTime = (details.seekOffset || 10);
+            const audio = player?.audioPlayer;
+            if (audio) {
+                audio.currentTime = Math.max(0, audio.currentTime - seekTime);
+            }
+        });
+
+        navigator.mediaSession.setActionHandler('seekforward', (details) => {
+            const seekTime = (details.seekOffset || 10);
+            const audio = player?.audioPlayer;
+            if (audio) {
+                audio.currentTime = Math.min(audio.duration, audio.currentTime + seekTime);
+            }
+        });
+
+        navigator.mediaSession.setActionHandler('seekto', (details) => {
+            const audio = player?.audioPlayer;
+            if (audio && details.seekTime !== undefined) {
+                audio.currentTime = details.seekTime;
+            }
+        });
+
+        // 4. 设置播放位置状态 (修复 duration = NaN 的问题)
+        const audio = player?.audioPlayer;
+        const isValidDuration = audio?.duration > 0;
+
+        // **关键修复：只有当 duration 是一个有效数字时才调用 setPositionState**
+        if (audio && 'setPositionState' in navigator.mediaSession && isValidDuration) {
+            navigator.mediaSession.setPositionState({
+                duration: audio.duration,
+                playbackRate: audio.playbackRate,
+                position: audio.currentTime,
+            });
+        }
+    }
+};
+// **==================== Media Session 设置函数 END ====================**
+
 export const PlayerProvider = ({ children }) => {
     const audioRef = useRef(null);
     const playerRef = useRef(null);
     const parsedLyricsRef = useRef([]);
     const playerStateRef = useRef(null);
 
-    const [playerState, setPlayerState] = useState({
-        isPlaying: false,
-        songName: '',
-        songSinger: '',
-        songAlbum: '',
-        songCoverPmid: '',
-        songCoverUrl: '',
-        songMid: '',
-        songLrc: '',
-        statusText: '未连接',
-        currentTime: '0:00',
-        duration: '0:00',
-        currentLyrics: '',
-        volume: 1.0,
-        isBuffering: false,
-        progressMax: 100,
-        progressValue: 0,
-        isWsOpen: false,
-        alwaysPlaying: alwaysPlaying,
-    });
+    const [playerState, setPlayerState] = useState(INITIAL_PLAYER_STATE);
 
     // ==================== 核心状态更新逻辑 (稳定化) ====================
     const handlePlayerStateChange = useCallback((playerInstance) => {
@@ -57,8 +153,12 @@ export const PlayerProvider = ({ children }) => {
             parsedLyricsRef.current = parseLrc(newSongLrc || '');
         }
 
-        setPlayerState(prevState => ({
-            ...prevState,
+        // **修复 TypeError: Cannot read properties of null (reading 'progressMax')**
+        // 确保 playerStateRef.current 即使为 null 也能回退到安全值
+        const fallbackProgressMax = playerStateRef.current?.progressMax ?? INITIAL_PLAYER_STATE.progressMax;
+        const fallbackProgressValue = playerStateRef.current?.progressValue ?? INITIAL_PLAYER_STATE.progressValue;
+
+        const newPlayerState = {
             isPlaying: state.isPlaying,
             songName: currentPlayerRef?.songData?.track_info?.title || '',
             songSinger: currentPlayerRef?.songData?.track_info?.singer?.map(s => s.name || s.title).join(' / ') || '-',
@@ -72,9 +172,15 @@ export const PlayerProvider = ({ children }) => {
             duration: state.formattedDuration,
             volume: state.volume,
             isBuffering: state.isBuffering,
-            progressMax: audioEl.duration || prevState.progressMax,
-            progressValue: audioEl.currentTime || prevState.progressValue,
+            progressMax: audioEl.duration || fallbackProgressMax, // 已修复
+            progressValue: audioEl.currentTime || fallbackProgressValue, // 已修复
             isWsOpen: playerInstance.ws?.readyState === WebSocket.OPEN
+        };
+
+        setPlayerState(prevState => ({
+            ...prevState,
+            ...newPlayerState,
+            alwaysPlaying: alwaysPlaying, // 保持 alwaysPlaying
         }));
     }, []); // 无外部依赖，因为它使用了 ref 和稳定的 setPlayerState
 
@@ -104,6 +210,10 @@ export const PlayerProvider = ({ children }) => {
     // 把最新 playerState 同步到 ref（非常重要）
     useEffect(() => {
         playerStateRef.current = playerState;
+
+        // **新增：调用 setupMediaSession**
+        setupMediaSession(playerState, playerRef.current);
+
     }, [playerState]);
 
     // ==================== 当 songMid 变化时，主动获取歌词（若缓存未命中则调用实例方法） ====================
@@ -133,7 +243,9 @@ export const PlayerProvider = ({ children }) => {
             setPlayerState(prev => ({ ...prev, songLrc: txt }));
         }).catch(e => {
             // 忽略错误，但记录日志（若 player 有日志方法可用）
-            try { player._wsLog && player._wsLog('warn', 'LYRIC', '获取歌词失败', e); } catch {}
+            try { player._wsLog && player._wsLog('warn', 'LYRIC', '获取歌词失败', e); } catch { 
+                // 忽略错误
+            }
         });
 
         return () => { cancelled = true; };
@@ -170,6 +282,16 @@ export const PlayerProvider = ({ children }) => {
                 currentTime: formattedTime,
                 currentLyrics: currentLineText,
             }));
+
+            const isValidDuration = audio?.duration > 0; // 检查 duration 是否有效
+
+            if (audio && 'mediaSession' in navigator && 'setPositionState' in navigator.mediaSession && isValidDuration) {
+                navigator.mediaSession.setPositionState({
+                    duration: audio.duration,
+                    playbackRate: audio.playbackRate,
+                    position: currentTime,
+                });
+            }
         };
 
         const handleDurationChange = () => {
@@ -205,7 +327,7 @@ export const PlayerProvider = ({ children }) => {
             if (typeof playerRef.current.play === 'function') {
                 playerRef.current.play();
             } else {
-                playerRef.current?.audioPlayer?.play?.().catch(() => {});
+                playerRef.current?.audioPlayer?.play?.().catch(() => { });
             }
         } else if (isAlwaysPlaying && isCurrentlyPlaying) {
             console.log('持续播放已启用，无法暂停');
@@ -219,7 +341,15 @@ export const PlayerProvider = ({ children }) => {
         if (audioRef.current && playerRef.current) {
             try {
                 audioRef.current.currentTime = time;
-            } catch (e) {
+
+                // **新增：手动同步 Media Session 的进度**
+                if ('mediaSession' in navigator && 'setPositionState' in navigator.mediaSession) {
+                    navigator.mediaSession.setPositionState({
+                        position: time,
+                    });
+                }
+
+            } catch {
                 // 某些浏览器/时序下会抛错，忽略
             }
         }
@@ -240,7 +370,7 @@ export const PlayerProvider = ({ children }) => {
 
             if (audio && audio.paused && currentState?.songMid) {
                 console.log('检测到用户点击，尝试恢复播放...');
-                audio.play().catch(() => {});
+                audio.play().catch(() => { });
             }
         };
 

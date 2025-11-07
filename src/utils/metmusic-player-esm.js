@@ -23,7 +23,7 @@ class MeTMusicPlayer {
         this.serverLocalTimeDiff = 0; // serverTimeMs - localTimeMs
 
         // 缓存
-        this.midUrlCache = {};     // { mid: { url, track_info } }
+        this.midUrlCache = {};      // { mid: { url, track_info } }
         this.midLyricsCache = {};  // { mid: lyricsText }
 
         // 状态
@@ -58,7 +58,6 @@ class MeTMusicPlayer {
 
     _init() {
         this._bindEvents();
-        this._initMediaSession();
     }
 
     // ---------- Logging ----------
@@ -132,12 +131,10 @@ class MeTMusicPlayer {
         });
 
         this.audioPlayer.addEventListener('play', () => {
-            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
             this._triggerOnChange();
         });
 
         this.audioPlayer.addEventListener('pause', () => {
-            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
             this._triggerOnChange();
         });
 
@@ -147,18 +144,14 @@ class MeTMusicPlayer {
         });
 
         this.audioPlayer.addEventListener('ended', () => {
-            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'none';
             this._triggerOnChange();
         });
 
         this.audioPlayer.addEventListener('timeupdate', () => {
-            // 每次 timeupdate 更新 media session position（节制）
-            this._updateMediaSessionPositionState();
             this._triggerOnChange();
         });
 
         this.audioPlayer.addEventListener('durationchange', () => {
-            this._updateMediaSessionPositionState();
             this._triggerOnChange();
         });
 
@@ -166,52 +159,6 @@ class MeTMusicPlayer {
         this.audioPlayer.addEventListener('error', (e) => {
             this._wsLog('error', 'AUDIO', 'audio element error', e);
         });
-    }
-
-    // ---------- Media Session ----------
-    _initMediaSession() {
-        if ('mediaSession' in navigator) {
-            navigator.mediaSession.setActionHandler('play', () => {
-                this.audioPlayer.play().catch(e => this._wsLog('error', 'MediaSession', 'Play Error', e));
-            });
-            navigator.mediaSession.setActionHandler('pause', () => {
-                this.audioPlayer.pause();
-            });
-        }
-    }
-
-    _updateMediaSessionMetadata(trackInfo) {
-        if (!('mediaSession' in navigator)) return;
-
-        if (trackInfo) {
-            let artworkUrl = trackInfo.album?.coverUrl || trackInfo.album?.pic || '';
-            navigator.mediaSession.metadata = new MediaMetadata({
-                title: trackInfo.title || '未知歌曲',
-                artist: trackInfo.singer?.map(s => s.name).join(', ') || '未知歌手',
-                album: trackInfo.album?.name || '未知专辑',
-                artwork: artworkUrl ? [{ src: artworkUrl, sizes: '512x512', type: 'image/jpeg' }] : []
-            });
-        } else {
-            navigator.mediaSession.metadata = null;
-        }
-    }
-
-    _updateMediaSessionPositionState() {
-        if ('mediaSession' in navigator) {
-            const dur = this.audioPlayer.duration;
-            const pos = this.audioPlayer.currentTime;
-            if (isFinite(dur) && dur > 0 && isFinite(pos)) {
-                try {
-                    navigator.mediaSession.setPositionState({
-                        duration: dur,
-                        playbackRate: this.audioPlayer.playbackRate,
-                        position: pos
-                    });
-                } catch (e) {
-                    // 某些浏览器对 positionState 有限制，静默处理
-                }
-            }
-        }
     }
 
     // ---------- 状态导出 ----------
@@ -531,7 +478,6 @@ class MeTMusicPlayer {
     _updateSongInfo(trackInfo) {
         // trackInfo 可能为 null（清除 metadata）
         this.songData = Object.assign({}, this.songData || {}, trackInfo ? { track_info: trackInfo } : {});
-        this._updateMediaSessionMetadata(trackInfo);
         this._triggerOnChange();
     }
 
@@ -546,10 +492,6 @@ class MeTMusicPlayer {
                 this.audioPlayer.load();
             }
 
-            if ('mediaSession' in navigator) {
-                navigator.mediaSession.metadata = null;
-                navigator.mediaSession.playbackState = 'paused';
-            }
         } catch (e) {
             this._wsLog('error', 'PAUSE', '暂停处理异常', e);
         }
@@ -601,7 +543,7 @@ class MeTMusicPlayer {
         if (this.ws) {
             try {
                 this.ws.close();
-            } catch (e) {
+            } catch {
                 // ignore
             }
             this.ws = null;

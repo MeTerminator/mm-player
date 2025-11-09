@@ -31,18 +31,11 @@ const INITIAL_PLAYER_STATE = {
     alwaysPlaying: alwaysPlaying,
 };
 
-// **==================== Media Session 设置函数 ====================**
-/**
- * 设置 Media Session 的元数据（曲名、歌手、封面）和操作。
- * 仅在浏览器支持 `navigator.mediaSession` 时执行。
- * @param {object} state - 当前播放器状态
- * @param {object} player - 播放器实例引用
- */
+// **==================== Media Session ====================**
 const setupMediaSession = (state, player) => {
     if ('mediaSession' in navigator) {
         const { songName, songSinger, songAlbum, songCoverUrl, isPlaying } = state;
 
-        // 1. 设置元数据 (保持不变)
         if (songName) {
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: songName || '未知歌曲',
@@ -52,12 +45,10 @@ const setupMediaSession = (state, player) => {
             });
         }
 
-        // 2. 设置播放状态 (保持不变)
         if (navigator.mediaSession.playbackState) {
             navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
         }
 
-        // 3. 设置操作处理 (保持不变)
         const actions = ['play', 'pause', 'previoustrack', 'nexttrack', 'seekbackward', 'seekforward', 'seekto'];
         actions.forEach(action => {
             try {
@@ -67,7 +58,6 @@ const setupMediaSession = (state, player) => {
             }
         });
 
-        // 播放/暂停
         navigator.mediaSession.setActionHandler('play', () => {
             player?.audioPlayer?.play?.().catch(() => { });
         });
@@ -109,11 +99,9 @@ const setupMediaSession = (state, player) => {
             }
         });
 
-        // 4. 设置播放位置状态 (修复 duration = NaN 的问题)
         const audio = player?.audioPlayer;
         const isValidDuration = audio?.duration > 0;
 
-        // **关键修复：只有当 duration 是一个有效数字时才调用 setPositionState**
         if (audio && 'setPositionState' in navigator.mediaSession && isValidDuration) {
             navigator.mediaSession.setPositionState({
                 duration: audio.duration,
@@ -123,17 +111,18 @@ const setupMediaSession = (state, player) => {
         }
     }
 };
-// **==================== Media Session 设置函数 END ====================**
 
 export const PlayerProvider = ({ children }) => {
     const audioRef = useRef(null);
+    const audioDataArrayRef = useRef(null);
+    const analyserRef = useRef(null);
+    const audioCtxRef = useRef(null);
     const playerRef = useRef(null);
     const parsedLyricsRef = useRef([]);
     const playerStateRef = useRef(null);
 
     const [playerState, setPlayerState] = useState(INITIAL_PLAYER_STATE);
 
-    // ==================== 核心状态更新逻辑 (稳定化) ====================
     const handlePlayerStateChange = useCallback((playerInstance) => {
         if (!playerInstance || !playerInstance.audioPlayer) return;
 
@@ -141,11 +130,9 @@ export const PlayerProvider = ({ children }) => {
         const audioEl = playerInstance.audioPlayer;
 
         const currentPlayerRef = playerRef.current;
-        // 优先使用 playerInstance.songLyrics（prepareToPlay 会设置），否则回退到 songData.lyrics
         const lyricFromPlayer = currentPlayerRef?.songLyrics || currentPlayerRef?.songData?.lyrics || '';
         const songCoverPmid = currentPlayerRef?.songData?.track_info?.album?.pmid || '';
 
-        // 仅在歌曲/歌词数据改变时才重新解析 LRC
         const newSongLrc = lyricFromPlayer;
         const prevSongLrc = playerStateRef.current?.songLrc || '';
 
@@ -153,8 +140,6 @@ export const PlayerProvider = ({ children }) => {
             parsedLyricsRef.current = parseLrc(newSongLrc || '');
         }
 
-        // **修复 TypeError: Cannot read properties of null (reading 'progressMax')**
-        // 确保 playerStateRef.current 即使为 null 也能回退到安全值
         const fallbackProgressMax = playerStateRef.current?.progressMax ?? INITIAL_PLAYER_STATE.progressMax;
         const fallbackProgressValue = playerStateRef.current?.progressValue ?? INITIAL_PLAYER_STATE.progressValue;
 
@@ -172,30 +157,62 @@ export const PlayerProvider = ({ children }) => {
             duration: state.formattedDuration,
             volume: state.volume,
             isBuffering: state.isBuffering,
-            progressMax: audioEl.duration || fallbackProgressMax, // 已修复
-            progressValue: audioEl.currentTime || fallbackProgressValue, // 已修复
+            progressMax: audioEl.duration || fallbackProgressMax,
+            progressValue: audioEl.currentTime || fallbackProgressValue,
             isWsOpen: playerInstance.ws?.readyState === WebSocket.OPEN
         };
 
         setPlayerState(prevState => ({
             ...prevState,
             ...newPlayerState,
-            alwaysPlaying: alwaysPlaying, // 保持 alwaysPlaying
+            alwaysPlaying: alwaysPlaying,
         }));
-    }, []); // 无外部依赖，因为它使用了 ref 和稳定的 setPlayerState
+    }, []);
 
-    // ==================== 播放器初始化 (确保只执行一次) ====================
     useEffect(() => {
         const audioElement = audioRef.current;
 
         if (audioElement) {
-            // 确保播放器实例只创建一次，这是保证 WS 客户端唯一性的关键。
             if (playerRef.current) return;
+
+            let analyser, source, audioCtx;
+            let dataArray, bufferLength;
 
             const player = new MeTMusicPlayer(audioElement, SESSION_ID, {
                 onChange: handlePlayerStateChange,
             });
             playerRef.current = player;
+
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+
+                analyser = audioCtx.createAnalyser();
+                source = audioCtx.createMediaElementSource(audioElement);
+                source.connect(analyser);
+                analyser.connect(audioCtx.destination);
+
+                // 增加 FFT size 获取更多频率数据
+                analyser.fftSize = 2048;
+                bufferLength = analyser.frequencyBinCount;
+
+                dataArray = new Uint8Array(bufferLength);
+                audioDataArrayRef.current = dataArray;
+                analyserRef.current = analyser;
+                audioCtxRef.current = audioCtx;
+
+            } catch (e) {
+                console.error("Web Audio API setup error during initialization:", e);
+                // 清理所有已创建的资源
+                if (source) source.disconnect();
+                if (audioCtx && audioCtx.state !== 'closed') audioCtx.close();
+                analyserRef.current = null;
+                audioDataArrayRef.current = null;
+                audioCtxRef.current = null;
+            }
+
 
             handlePlayerStateChange(player);
             player.start();
@@ -203,20 +220,56 @@ export const PlayerProvider = ({ children }) => {
             // 组件卸载时清理
             return () => {
                 player.stop(); // 清理 WebSocket 和 Interval
+
+                // 异步清理 Web Audio 资源，解决 InvalidStateError
+                setTimeout(() => {
+                    if (source) source.disconnect();
+                    if (audioCtx && audioCtx.state !== 'closed') audioCtx.close();
+                    // 在清理函数中清空 Ref，确保下次挂载时能重新初始化
+                    analyserRef.current = null;
+                    audioCtxRef.current = null;
+                    audioDataArrayRef.current = null;
+                }, 0);
             };
         }
-    }, [handlePlayerStateChange]); // 依赖 handlePlayerStateChange
+    }, [handlePlayerStateChange]);
 
-    // 把最新 playerState 同步到 ref（非常重要）
+
+    // ==================== Audio 数据高频读取 (RequestAnimationFrame 循环) ====================
+    useEffect(() => {
+        let frameId;
+        // 直接从 useRef 中读取值
+        const analyser = analyserRef.current;
+        const dataArray = audioDataArrayRef.current;
+
+        // 如果 analyser 或 dataArray 不存在，说明 Web Audio 初始化失败或还未完成，直接退出
+        if (!analyser || !dataArray) {
+            return;
+        }
+
+        const updateAudioData = () => {
+            // 将当前音频的频率数据复制到 dataArray 中
+            analyser.getByteFrequencyData(dataArray);
+
+            // 循环调用
+            frameId = requestAnimationFrame(updateAudioData);
+        };
+
+        updateAudioData();
+
+        // 清理函数：停止 requestAnimationFrame 循环
+        return () => {
+            if (frameId) {
+                cancelAnimationFrame(frameId);
+            }
+        };
+    }, []);
+
     useEffect(() => {
         playerStateRef.current = playerState;
-
-        // **新增：调用 setupMediaSession**
         setupMediaSession(playerState, playerRef.current);
-
     }, [playerState]);
 
-    // ==================== 当 songMid 变化时，主动获取歌词（若缓存未命中则调用实例方法） ====================
     useEffect(() => {
         const mid = playerState.songMid;
         if (!mid || !playerRef.current) return;
@@ -224,26 +277,21 @@ export const PlayerProvider = ({ children }) => {
         let cancelled = false;
         const player = playerRef.current;
 
-        // 优先使用播放器内部缓存（midLyricsCache）或 player.songLyrics
         const cached = (player.midLyricsCache && player.midLyricsCache[mid]) || player.songLyrics;
         if (cached) {
             const ly = typeof cached === 'string' ? cached : String(cached);
             parsedLyricsRef.current = parseLrc(ly || '');
-            // 更新 state 中的 songLrc（保证界面有歌词文本）
             setPlayerState(prev => ({ ...prev, songLrc: ly }));
             return;
         }
 
-        // 否则调用实例的 _getSongLyrics（它返回 Promise）
-        // 注意：_getSongLyrics 是私有方法，但在当前上下文可用，我们调用它以确保歌词获取
         player._getSongLyrics(mid).then(ly => {
             if (cancelled) return;
             const txt = ly || '';
             parsedLyricsRef.current = parseLrc(txt);
             setPlayerState(prev => ({ ...prev, songLrc: txt }));
         }).catch(e => {
-            // 忽略错误，但记录日志（若 player 有日志方法可用）
-            try { player._wsLog && player._wsLog('warn', 'LYRIC', '获取歌词失败', e); } catch { 
+            try { player._wsLog && player._wsLog('warn', 'LYRIC', '获取歌词失败', e); } catch {
                 // 忽略错误
             }
         });
@@ -251,7 +299,6 @@ export const PlayerProvider = ({ children }) => {
         return () => { cancelled = true; };
     }, [playerState.songMid]);
 
-    // ==================== Audio 时间事件监听 (高频更新) ====================
     useEffect(() => {
         const audio = audioRef.current;
         if (!audio) return;
@@ -283,7 +330,7 @@ export const PlayerProvider = ({ children }) => {
                 currentLyrics: currentLineText,
             }));
 
-            const isValidDuration = audio?.duration > 0; // 检查 duration 是否有效
+            const isValidDuration = audio?.duration > 0;
 
             if (audio && 'mediaSession' in navigator && 'setPositionState' in navigator.mediaSession && isValidDuration) {
                 navigator.mediaSession.setPositionState({
@@ -311,9 +358,8 @@ export const PlayerProvider = ({ children }) => {
             audio.removeEventListener("timeupdate", handleTimeUpdate);
             audio.removeEventListener("durationchange", handleDurationChange);
         };
-    }, []); // 依赖空数组，只在挂载/卸载时执行
+    }, []);
 
-    // ==================== 暴露给外部的函数/值 ====================
     const togglePlayback = useCallback(() => {
         const isWsOpen = playerRef.current?.ws?.readyState === WebSocket.OPEN;
         const currentState = playerStateRef.current;
@@ -323,7 +369,6 @@ export const PlayerProvider = ({ children }) => {
         if (!isWsOpen && !isCurrentlyPlaying) return;
 
         if (isAlwaysPlaying && !isCurrentlyPlaying) {
-            // 在 MeTMusicPlayer 中可能没有 play 方法（保持向后兼容）
             if (typeof playerRef.current.play === 'function') {
                 playerRef.current.play();
             } else {
@@ -342,7 +387,6 @@ export const PlayerProvider = ({ children }) => {
             try {
                 audioRef.current.currentTime = time;
 
-                // **新增：手动同步 Media Session 的进度**
                 if ('mediaSession' in navigator && 'setPositionState' in navigator.mediaSession) {
                     navigator.mediaSession.setPositionState({
                         position: time,
@@ -350,7 +394,7 @@ export const PlayerProvider = ({ children }) => {
                 }
 
             } catch {
-                // 某些浏览器/时序下会抛错，忽略
+                // 忽略
             }
         }
     }, []);
@@ -361,8 +405,10 @@ export const PlayerProvider = ({ children }) => {
         audioRef,
         togglePlayback,
         seekTo,
+        audioDataArrayRef,
     };
 
+    // 文档点击事件处理
     useEffect(() => {
         const handleDocumentClick = () => {
             const audio = audioRef.current;

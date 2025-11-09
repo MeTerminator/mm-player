@@ -6,10 +6,10 @@
   transform: translateY(-50%);
   margin: 0 auto;
   text-align: center;
-  transition: all 1s ease-in-out;
 }
 
 .maintext-container-playing {
+  transition: all 1s ease-in-out;
   transform: translateY(-65%);
 }
 

@@ -157,7 +157,45 @@ class MeTMusicPlayer {
 
         // 可选：监听错误以便更好地定位问题
         this.audioPlayer.addEventListener('error', (e) => {
-            this._wsLog('error', 'AUDIO', 'audio element error', e);
+            // 检查 this.audioPlayer 是否存在且处于错误状态
+            if (this.audioPlayer && this.audioPlayer.error) {
+                const mediaError = this.audioPlayer.error;
+                const errorCode = mediaError.code;
+                const errorMessage = mediaError.message; // 浏览器可能会提供更详细的文本信息 (Chrome/Firefox 通常提供)
+                const errorSrc = this.audioPlayer.currentSrc; // 正在尝试加载的音频源 URL
+
+                // 映射错误码到更友好的描述
+                let errorDescription = '未知错误';
+                switch (errorCode) {
+                    case 1: // MediaError.MEDIA_ERR_ABORTED
+                        errorDescription = '用户中止了音频播放/加载';
+                        break;
+                    case 2: // MediaError.MEDIA_ERR_NETWORK
+                        errorDescription = '网络错误导致音频下载失败';
+                        break;
+                    case 3: // MediaError.MEDIA_ERR_DECODE
+                        errorDescription = '解码错误 (文件损坏或浏览器不支持的编码)';
+                        break;
+                    case 4: // MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED
+                        errorDescription = '找不到资源或格式不支持 (404/跨域/MIME类型错误)';
+                        break;
+                    // 某些浏览器可能返回 5，或自定义错误
+                    default:
+                        errorDescription = `未知错误 (Code: ${errorCode})`;
+                }
+
+                // 记录更详细的日志
+                this._wsLog('error', 'AUDIO', 'audio element error', {
+                    description: errorDescription,
+                    code: errorCode,
+                    message: errorMessage || 'N/A', // 如果没有 message 则显示 N/A
+                    src: errorSrc
+                });
+
+            } else {
+                // 如果 audio.error 对象不存在 (罕见, 可能是异步问题)
+                this._wsLog('error', 'AUDIO', 'audio element error - Generic Event', e);
+            }
         });
     }
 
@@ -332,9 +370,10 @@ class MeTMusicPlayer {
     _statusCheck() {
         // 若超过 12s 未收到服务器反馈，则判定停止播放状态
         if (this.musicStatus && (Date.now() - this.lastUpdateTs > 12000)) {
-            this._wsLog('warn', 'STATUS', '超过 12s 未收到更新，设为暂停状态');
-            this.musicStatus = false;
-            this._updateMusicStatus(false, "", 0);
+            this._wsLog('warn', 'STATUS', '超过 12s 未收到更新');
+            // this._wsLog('warn', 'STATUS', '超过 12s 未收到更新，设为暂停状态');
+            // this.musicStatus = false;
+            // this._updateMusicStatus(false, "", 0);
         }
         this._triggerOnChange();
     }

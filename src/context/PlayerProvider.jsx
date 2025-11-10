@@ -11,6 +11,7 @@ const SESSION_ID = getLocalStorageItem('sid') || "";
 const alwaysPlaying = true;
 
 const INITIAL_PLAYER_STATE = {
+    // ... (保持不变)
     isPlaying: false,
     songName: '',
     songSinger: '',
@@ -32,6 +33,7 @@ const INITIAL_PLAYER_STATE = {
 };
 
 // **==================== Media Session ====================**
+// ... (setupMediaSession 函数保持不变)
 const setupMediaSession = (state, player) => {
     if ('mediaSession' in navigator) {
         const { songName, songSinger, songAlbum, songCoverUrl, isPlaying } = state;
@@ -122,8 +124,59 @@ export const PlayerProvider = ({ children }) => {
     const playerStateRef = useRef(null);
 
     const [playerState, setPlayerState] = useState(INITIAL_PLAYER_STATE);
+    const [isAudioInitialized, setIsAudioInitialized] = useState(false);
+    
+    // 新增一个状态来跟踪是否已经尝试过首次用户交互
+    const [hasUserInteracted, setHasUserInteracted] = useState(false);
+
+    /**
+     * @description Web Audio API 初始化函数。
+     */
+    const initWebAudio = useCallback(() => {
+        const audioElement = audioRef.current;
+        // 如果已初始化或音频元素不存在，则退出
+        if (!audioElement || analyserRef.current) return;
+
+        let analyser, source, audioCtx;
+        let dataArray, bufferLength;
+
+        try {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            audioCtxRef.current = audioCtx; 
+            
+            // 确保 context 已连接
+            if (audioCtx.state !== 'closed') {
+                analyser = audioCtx.createAnalyser();
+                source = audioCtx.createMediaElementSource(audioElement);
+                source.connect(analyser);
+                analyser.connect(audioCtx.destination);
+
+                analyser.fftSize = 256;
+                bufferLength = analyser.frequencyBinCount;
+                dataArray = new Uint8Array(bufferLength);
+
+                audioDataArrayRef.current = dataArray;
+                analyserRef.current = analyser;
+                
+                setIsAudioInitialized(true); 
+                console.log("Web Audio API initialized and connected.");
+            } else {
+                 console.warn("Web Audio API failed to initialize: context closed.");
+            }
+
+        } catch (e) {
+            console.error("Web Audio API setup error during runtime:", e);
+            if (source) source.disconnect();
+            if (audioCtx && audioCtx.state !== 'closed') audioCtx.close();
+            analyserRef.current = null;
+            audioDataArrayRef.current = null;
+            audioCtxRef.current = null;
+            setIsAudioInitialized(false); 
+        }
+    }, [setIsAudioInitialized]); 
 
     const handlePlayerStateChange = useCallback((playerInstance) => {
+        // ... (保持不变)
         if (!playerInstance || !playerInstance.audioPlayer) return;
 
         const state = playerInstance.getPlayerStatus();
@@ -169,51 +222,20 @@ export const PlayerProvider = ({ children }) => {
         }));
     }, []);
 
+    // **1. Player 初始化 (不包含 Web Audio API)**
     useEffect(() => {
+        // ... (保持不变)
         const audioElement = audioRef.current;
 
         if (audioElement) {
             if (playerRef.current) return;
 
-            let analyser, source, audioCtx;
-            let dataArray, bufferLength;
-
+            // 初始化 MeTMusicPlayer
             const player = new MeTMusicPlayer(audioElement, SESSION_ID, {
                 onChange: handlePlayerStateChange,
             });
             playerRef.current = player;
-
-            try {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                if (audioCtx.state === 'suspended') {
-                    audioCtx.resume();
-                }
-
-                analyser = audioCtx.createAnalyser();
-                source = audioCtx.createMediaElementSource(audioElement);
-                source.connect(analyser);
-                analyser.connect(audioCtx.destination);
-
-                // 增加 FFT size 获取更多频率数据
-                analyser.fftSize = 2048;
-                bufferLength = analyser.frequencyBinCount;
-
-                dataArray = new Uint8Array(bufferLength);
-                audioDataArrayRef.current = dataArray;
-                analyserRef.current = analyser;
-                audioCtxRef.current = audioCtx;
-
-            } catch (e) {
-                console.error("Web Audio API setup error during initialization:", e);
-                // 清理所有已创建的资源
-                if (source) source.disconnect();
-                if (audioCtx && audioCtx.state !== 'closed') audioCtx.close();
-                analyserRef.current = null;
-                audioDataArrayRef.current = null;
-                audioCtxRef.current = null;
-            }
-
-
+            
             handlePlayerStateChange(player);
             player.start();
 
@@ -221,50 +243,50 @@ export const PlayerProvider = ({ children }) => {
             return () => {
                 player.stop(); // 清理 WebSocket 和 Interval
 
-                // 异步清理 Web Audio 资源，解决 InvalidStateError
+                // 异步清理 Web Audio 资源
                 setTimeout(() => {
-                    if (source) source.disconnect();
+                    const audioCtx = audioCtxRef.current;
                     if (audioCtx && audioCtx.state !== 'closed') audioCtx.close();
-                    // 在清理函数中清空 Ref，确保下次挂载时能重新初始化
                     analyserRef.current = null;
                     audioCtxRef.current = null;
                     audioDataArrayRef.current = null;
+                    setIsAudioInitialized(false);
                 }, 0);
             };
         }
     }, [handlePlayerStateChange]);
 
-
-    // ==================== Audio 数据高频读取 (RequestAnimationFrame 循环) ====================
+    // **2. Audio 数据高频读取 (RequestAnimationFrame 循环)**
     useEffect(() => {
+        // ... (保持不变)
         let frameId;
-        // 直接从 useRef 中读取值
-        const analyser = analyserRef.current;
-        const dataArray = audioDataArrayRef.current;
-
-        // 如果 analyser 或 dataArray 不存在，说明 Web Audio 初始化失败或还未完成，直接退出
-        if (!analyser || !dataArray) {
+        
+        if (!isAudioInitialized) {
             return;
         }
 
-        const updateAudioData = () => {
-            // 将当前音频的频率数据复制到 dataArray 中
-            analyser.getByteFrequencyData(dataArray);
+        const analyser = analyserRef.current;
+        const dataArray = audioDataArrayRef.current;
 
-            // 循环调用
+        if (!analyser || !dataArray) {
+            return; 
+        }
+
+        const updateAudioData = () => {
+            analyser.getByteFrequencyData(dataArray);
             frameId = requestAnimationFrame(updateAudioData);
         };
 
         updateAudioData();
 
-        // 清理函数：停止 requestAnimationFrame 循环
         return () => {
             if (frameId) {
                 cancelAnimationFrame(frameId);
             }
         };
-    }, []);
+    }, [isAudioInitialized]); 
 
+    // ... (Media Session, Lyric Fetch, TimeUpdate 保持不变)
     useEffect(() => {
         playerStateRef.current = playerState;
         setupMediaSession(playerState, playerRef.current);
@@ -361,6 +383,7 @@ export const PlayerProvider = ({ children }) => {
     }, []);
 
     const togglePlayback = useCallback(() => {
+        // ... (保持不变)
         const isWsOpen = playerRef.current?.ws?.readyState === WebSocket.OPEN;
         const currentState = playerStateRef.current;
         const isCurrentlyPlaying = currentState?.isPlaying;
@@ -383,6 +406,7 @@ export const PlayerProvider = ({ children }) => {
     }, []);
 
     const seekTo = useCallback((time) => {
+        // ... (保持不变)
         if (audioRef.current && playerRef.current) {
             try {
                 audioRef.current.currentTime = time;
@@ -408,24 +432,47 @@ export const PlayerProvider = ({ children }) => {
         audioDataArrayRef,
     };
 
-    // 文档点击事件处理
+    // **3. 文档点击事件处理 (用于触发 Web Audio 初始化和播放)**
     useEffect(() => {
         const handleDocumentClick = () => {
             const audio = audioRef.current;
-            const currentState = playerStateRef.current;
+            const audioCtx = audioCtxRef.current;
 
-            if (audio && audio.paused && currentState?.songMid) {
-                console.log('检测到用户点击，尝试恢复播放...');
-                audio.play().catch(() => { });
+            // 1. Web Audio 初始化：仅在第一次交互时初始化
+            if (!analyserRef.current) {
+                initWebAudio();
+            }
+            
+            // 2. 核心 FIX：确保 AudioContext 恢复
+            if (audioCtx && audioCtx.state === 'suspended') {
+                 audioCtx.resume().catch(e => console.error("AudioContext resume failed on click:", e));
+            }
+
+            // 3. 强制尝试播放 <audio> 元素
+            if (audio) {
+                console.log('检测到用户点击，强制尝试恢复播放...');
+                // 确保我们设置了交互状态，以便其他逻辑（如播放器内部）可以判断
+                if (!hasUserInteracted) {
+                    setHasUserInteracted(true);
+                }
+                
+                audio.play().catch(error => {
+                    // 记录错误，通常是 NotAllowedError 或等待歌曲数据加载
+                    console.warn("播放尝试失败:", error.message);
+                });
             }
         };
 
-        document.body.addEventListener('click', handleDocumentClick, true);
+        // 监听 body 上的点击和触摸事件，确保捕获到用户交互
+        document.body.addEventListener('click', handleDocumentClick, { capture: true });
+        document.body.addEventListener('touchstart', handleDocumentClick, { capture: true });
+
 
         return () => {
-            document.body.removeEventListener('click', handleDocumentClick, true);
+            document.body.removeEventListener('click', handleDocumentClick, { capture: true });
+            document.body.removeEventListener('touchstart', handleDocumentClick, { capture: true });
         };
-    }, []);
+    }, [initWebAudio, hasUserInteracted]);
 
     return (
         <PlayerContext.Provider value={contextValue}>

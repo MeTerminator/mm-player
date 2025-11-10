@@ -50,14 +50,11 @@ function Visualizer() {
                 gradient.addColorStop(1, "rgba(255,255,255,0)");
 
                 ctx.fillStyle = gradient;
-                const radius = barWidth / 2;
-
                 ctx.beginPath();
                 ctx.moveTo(x + barWidth / 2, 0);
-                ctx.arc(x + barWidth / 2, 0, radius, Math.PI, 0, true);
                 ctx.fill();
 
-                ctx.fillRect(x, radius, barWidth, y - radius);
+                ctx.fillRect(x, 0, barWidth, y);
 
                 // 柱子间隔
                 x += barWidth;

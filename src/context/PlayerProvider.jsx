@@ -11,7 +11,6 @@ const SESSION_ID = getLocalStorageItem('sid') || "";
 const alwaysPlaying = true;
 
 const INITIAL_PLAYER_STATE = {
-    // ... (保持不变)
     isPlaying: false,
     songName: '',
     songSinger: '',
@@ -26,14 +25,13 @@ const INITIAL_PLAYER_STATE = {
     currentLyrics: '',
     volume: 1.0,
     isBuffering: false,
-    progressMax: 100, // 默认值
-    progressValue: 0, // 默认值
+    progressMax: 100,
+    progressValue: 0,
     isWsOpen: false,
     alwaysPlaying: alwaysPlaying,
 };
 
 // **==================== Media Session ====================**
-// ... (setupMediaSession 函数保持不变)
 const setupMediaSession = (state, player) => {
     if ('mediaSession' in navigator) {
         const { songName, songSinger, songAlbum, songCoverUrl, isPlaying } = state;
@@ -126,7 +124,7 @@ export const PlayerProvider = ({ children }) => {
     const [playerState, setPlayerState] = useState(INITIAL_PLAYER_STATE);
     const [isAudioInitialized, setIsAudioInitialized] = useState(false);
     
-    // 新增一个状态来跟踪是否已经尝试过首次用户交互
+    // 跟踪是否已经尝试过首次用户交互
     const [hasUserInteracted, setHasUserInteracted] = useState(false);
 
     /**
@@ -176,7 +174,6 @@ export const PlayerProvider = ({ children }) => {
     }, [setIsAudioInitialized]); 
 
     const handlePlayerStateChange = useCallback((playerInstance) => {
-        // ... (保持不变)
         if (!playerInstance || !playerInstance.audioPlayer) return;
 
         const state = playerInstance.getPlayerStatus();
@@ -222,9 +219,8 @@ export const PlayerProvider = ({ children }) => {
         }));
     }, []);
 
-    // **1. Player 初始化 (不包含 Web Audio API)**
+    // Player 初始化
     useEffect(() => {
-        // ... (保持不变)
         const audioElement = audioRef.current;
 
         if (audioElement) {
@@ -256,9 +252,8 @@ export const PlayerProvider = ({ children }) => {
         }
     }, [handlePlayerStateChange]);
 
-    // **2. Audio 数据高频读取 (RequestAnimationFrame 循环)**
+    // Audio 数据高频读取 (RequestAnimationFrame 循环)
     useEffect(() => {
-        // ... (保持不变)
         let frameId;
         
         if (!isAudioInitialized) {
@@ -286,7 +281,6 @@ export const PlayerProvider = ({ children }) => {
         };
     }, [isAudioInitialized]); 
 
-    // ... (Media Session, Lyric Fetch, TimeUpdate 保持不变)
     useEffect(() => {
         playerStateRef.current = playerState;
         setupMediaSession(playerState, playerRef.current);
@@ -383,7 +377,6 @@ export const PlayerProvider = ({ children }) => {
     }, []);
 
     const togglePlayback = useCallback(() => {
-        // ... (保持不变)
         const isWsOpen = playerRef.current?.ws?.readyState === WebSocket.OPEN;
         const currentState = playerStateRef.current;
         const isCurrentlyPlaying = currentState?.isPlaying;
@@ -406,7 +399,6 @@ export const PlayerProvider = ({ children }) => {
     }, []);
 
     const seekTo = useCallback((time) => {
-        // ... (保持不变)
         if (audioRef.current && playerRef.current) {
             try {
                 audioRef.current.currentTime = time;
@@ -432,18 +424,16 @@ export const PlayerProvider = ({ children }) => {
         audioDataArrayRef,
     };
 
-    // **3. 文档点击事件处理 (用于触发 Web Audio 初始化和播放)**
+    // 文档点击事件处理 (用于触发 Web Audio 初始化和播放)
     useEffect(() => {
         const handleDocumentClick = () => {
             const audio = audioRef.current;
             const audioCtx = audioCtxRef.current;
 
-            // 1. Web Audio 初始化：仅在第一次交互时初始化
             if (!analyserRef.current) {
                 initWebAudio();
             }
             
-            // 2. 核心 FIX：确保 AudioContext 恢复
             if (audioCtx && audioCtx.state === 'suspended') {
                  audioCtx.resume().catch(e => console.error("AudioContext resume failed on click:", e));
             }

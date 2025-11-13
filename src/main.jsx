@@ -1,5 +1,5 @@
 import { createRoot } from 'react-dom/client'
-import Player from './Player.jsx'
+import Player from './views/Player/Player'
 import { PlayerProvider } from './context/PlayerProvider';
 import './index.css'
 

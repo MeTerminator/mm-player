@@ -1,0 +1,15 @@
+.player-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    height: 100vh;
+}
+
+.maintext-container {
+    margin: auto 0;
+}
+
+.song-container {
+    margin-bottom: 1%;
+}

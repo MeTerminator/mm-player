@@ -1,197 +1,253 @@
 .maintext-container {
-  width: 100%;
-  padding: 0 15vw;
-  position: fixed;
-  top: 50%;
-  transform: translateY(-50%);
-  margin: 0 auto;
-  text-align: center;
+    width: 100%;
+    /* padding: 0 15vw; */
+    /* position: fixed; */
+    /* top: 50%; */
+    /* transform: translateY(-50%); */
+    margin: 0 auto;
+    text-align: center;
+    position: relative;
 }
 
-.maintext-container-playing {
-  transition: all 1s ease-in-out;
-  transform: translateY(-65%);
-}
-
-.maintext {
-  font-family: var(--maintext-font);
-  font-size: 20em;
-  font-weight: bold;
-  background: linear-gradient(to bottom left,
-      rgba(255, 255, 255, 0.7),
-      rgba(255, 255, 255, 0.5));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  transition: all 1s ease-in-out;
-}
-
-/* 移动端优化 */
-
-@media (max-height: 600px) {
-  .maintext-container {
-    padding: 0 10vw;
-  }
-
-  .maintext {
-    font-size: 12em;
-  }
-
-  .maintext-lyrics {
-    font-size: 4em;
-  }
-}
-
-/* 真没招了 这是给 iPhone SE 用的 */
-@media (max-height: 400px) {
-  .maintext-container-playing {
+/* .maintext-container-playing {
+    transition: all 1s ease-in-out;
     transform: translateY(-70%);
-  }
+} */
 
-  .maintext-lyrics {
-    font-size: 3em;
-  }
+/* --- 主文本样式 --- */
+.maintext {
+    font-family: var(--maintext-font);
+    font-size: 4em;
+    font-weight: bold;
+    background: linear-gradient(to bottom left,
+            rgba(255, 255, 255, 0.7),
+            rgba(255, 255, 255, 0.5));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    /* transition: all 1s ease-in-out; */
+    position: relative;
+    display: inline-block;
 }
 
-/* 真真真没招了 */
-@media (max-width: 1300px) {
-  .maintext {
-    font-size: 16em;
-  }
-}
-
-@media (max-width: 1100px) {
-  .maintext {
-    font-size: 10em;
-  }
-}
-
-@media (max-width: 760px) {
-  .maintext {
-    font-size: 6em;
-  }
-}
-
-@media (max-width: 400px) {
-  .maintext {
-    font-size: 3em;
-  }
-}
-
-
+/* --- 歌词文本框样式 --- */
 .maintext-lyrics {
-  font-size: 6em;
-  transition: none;
-  white-space: pre-wrap;
+    transition: none;
+    white-space: pre-wrap;
+    position: absolute;
+    top: 0;
+    left: 10%;
+    /* transform: translate(-50%, -50%); */
+    width: 80%;
+    text-align: center;
+    opacity: 0;
 }
 
-/* 基础竖屏体验 */
+/* --- 动画关键帧和类定义 --- */
 
-@media (max-width: 760px) or (max-height: 600px) {
-  .maintext-lyrics {
-    font-size: 3em;
-  }
+/* ---------------------------------------------------- */
+/* 动画 0: 缩放、模糊淡入 / 缩放、模糊淡出 */
+/* ---------------------------------------------------- */
 
-  .maintext-container {
-    padding: 0 5vw;
-  }
+/* 进入动画 0: 从小、模糊淡入 */
+.maintext-lyrics-enter-0 {
+    animation: lyrics-enter-0 0.6s ease-in-out forwards;
+}
 
-  .maintext-container-playing {
-    transform: translateY(-85%);
-  }
+@keyframes lyrics-enter-0 {
+    from {
+        opacity: 0;
+        filter: blur(20px);
+        transform: scale(0.4);
+    }
+
+    to {
+        opacity: 1;
+        filter: blur(0);
+        transform: scale(1);
+    }
+}
+
+/* 退出动画 0: 缩放、模糊淡出 */
+.maintext-lyrics-exit-0 {
+    animation: lyrics-exit-0 0.6s ease-in-out forwards;
+}
+
+@keyframes lyrics-exit-0 {
+    from {
+        opacity: 1;
+        filter: blur(0);
+        transform: scale(1);
+    }
+
+    to {
+        opacity: 0;
+        filter: blur(20px);
+        transform: scale(0.4);
+    }
+}
+
+/* ---------------------------------------------------- */
+/* 动画 1: 拉伸、旋转淡入 / 收缩、旋转淡出 */
+/* ---------------------------------------------------- */
+
+/* 进入动画 1: 从拉伸、旋转淡入 */
+.maintext-lyrics-enter-1 {
+    animation: lyrics-enter-1 0.6s cubic-bezier(0.54, 0.02, 0.27, 1.08) forwards;
+}
+
+@keyframes lyrics-enter-1 {
+    from {
+        opacity: 0;
+        filter: blur(10px);
+        transform: scaleX(1.7) rotate(5deg);
+    }
+
+    to {
+        opacity: 1;
+        filter: blur(0);
+        transform: scaleX(1) rotate(0deg);
+    }
+}
+
+/* 退出动画 1: 拉伸、旋转淡出 */
+.maintext-lyrics-exit-1 {
+    animation: lyrics-exit-1 0.6s cubic-bezier(0.54, 0.02, 0.27, 1.08) forwards;
+}
+
+@keyframes lyrics-exit-1 {
+    from {
+        opacity: 1;
+        filter: blur(0);
+        transform: scaleX(1) rotate(0deg);
+    }
+
+    to {
+        opacity: 0;
+        filter: blur(10px);
+        transform: scaleX(0.5) rotate(-5deg);
+    }
 }
 
 
-.maintext-lyrics-animation-0 {
-  animation: lyrics-animation-0 0.6s ease-in-out;
+/* ---------------------------------------------------- */
+/* 动画 2: 反向旋转淡入 / 旋转淡出 */
+/* ---------------------------------------------------- */
+
+/* 进入动画 2: 从反向旋转淡入 */
+.maintext-lyrics-enter-2 {
+    animation: lyrics-enter-2 0.6s ease-in-out forwards;
 }
 
-@keyframes lyrics-animation-0 {
-  0% {
-    opacity: 0.4;
-    filter: blur(20px);
-    transform: scale(0.4);
-  }
+@keyframes lyrics-enter-2 {
+    from {
+        opacity: 0;
+        filter: blur(10px);
+        transform: rotate(-5deg);
+    }
 
-  100% {
-    opacity: 1;
-    filter: blur(0);
-    transform: scale(1);
-  }
-
+    to {
+        opacity: 1;
+        filter: blur(0);
+        transform: rotate(0deg);
+    }
 }
 
-
-.maintext-lyrics-animation-1 {
-  animation: lyrics-animation-1 0.6s cubic-bezier(0.54, 0.02, 0.27, 1.08);
+/* 退出动画 2: 旋转淡出 */
+.maintext-lyrics-exit-2 {
+    animation: lyrics-exit-2 0.6s ease-in-out forwards;
 }
 
-@keyframes lyrics-animation-1 {
-  0% {
-    opacity: 0.4;
-    filter: blur(10px);
-    transform: scaleX(1.7) rotate(5deg);
-  }
+@keyframes lyrics-exit-2 {
+    from {
+        opacity: 1;
+        filter: blur(0);
+        transform: rotate(0deg);
+    }
 
-  100% {
-    opacity: 1;
-    filter: blur(0);
-    transform: scaleX(1) rotate(0deg);
-  }
-
+    to {
+        opacity: 0;
+        filter: blur(10px);
+        transform: rotate(5deg);
+    }
 }
 
-.maintext-lyrics-animation-2 {
-  animation: lyrics-animation-2 0.6s ease-in-out;
+/* ---------------------------------------------------- */
+/* 动画 3: 正向旋转淡入 / 反向旋转淡出 */
+/* ---------------------------------------------------- */
+
+/* 进入动画 3: 从正向旋转淡入 */
+.maintext-lyrics-enter-3 {
+    animation: lyrics-enter-3 0.6s ease-in-out forwards;
 }
 
-@keyframes lyrics-animation-2 {
-  0% {
-    opacity: 0.4;
-    filter: blur(10px);
-    transform: rotate(-5deg);
-  }
+@keyframes lyrics-enter-3 {
+    from {
+        opacity: 0;
+        filter: blur(10px);
+        transform: rotate(5deg);
+    }
 
-  100% {
-    opacity: 1;
-    filter: blur(0);
-    transform: rotate(0deg);
-  }
-
+    to {
+        opacity: 1;
+        filter: blur(0);
+        transform: rotate(0deg);
+    }
 }
 
-.maintext-lyrics-animation-3 {
-  animation: lyrics-animation-3 0.6s ease-in-out;
+/* 退出动画 3: 反向旋转淡出 */
+.maintext-lyrics-exit-3 {
+    animation: lyrics-exit-3 0.6s ease-in-out forwards;
 }
 
-@keyframes lyrics-animation-3 {
-  0% {
-    opacity: 0.4;
-    filter: blur(10px);
-    transform: rotate(5deg);
-  }
+@keyframes lyrics-exit-3 {
+    from {
+        opacity: 1;
+        filter: blur(0);
+        transform: rotate(0deg);
+    }
 
-  100% {
-    opacity: 1;
-    filter: blur(0);
-    transform: rotate(0deg);
-  }
-
+    to {
+        opacity: 0;
+        filter: blur(10px);
+        transform: rotate(-5deg);
+    }
 }
 
-.maintext-lyrics-animation-4 {
-  animation: lyrics-animation-4 0.6s ease-in-out;
+/* ---------------------------------------------------- */
+/* 动画 4: 仅淡入 / 仅淡出 */
+/* ---------------------------------------------------- */
+
+/* 进入动画 4: 仅淡入 */
+.maintext-lyrics-enter-4 {
+    animation: lyrics-enter-4 0.6s ease-in-out forwards;
 }
 
-@keyframes lyrics-animation-4 {
-  0% {
-    opacity: 0.4;
-    filter: blur(10px);
-  }
+@keyframes lyrics-enter-4 {
+    from {
+        opacity: 0;
+        filter: blur(10px);
+    }
 
-  100% {
-    opacity: 1;
-    filter: blur(0);
-  }
+    to {
+        opacity: 1;
+        filter: blur(0);
+    }
+}
 
+/* 退出动画 4: 仅淡出 */
+.maintext-lyrics-exit-4 {
+    animation: lyrics-exit-4 0.6s ease-in-out forwards;
+}
+
+@keyframes lyrics-exit-4 {
+    from {
+        opacity: 1;
+        filter: blur(0);
+    }
+
+    to {
+        opacity: 0;
+        filter: blur(10px);
+    }
 }

@@ -18,11 +18,12 @@ const INITIAL_PLAYER_STATE = {
     songCoverPmid: '',
     songCoverUrl: '',
     songMid: '',
-    songLrc: '',
+    songLyricsLines: [],
     statusText: '未连接',
     currentTime: '0:00',
     duration: '0:00',
     currentLyrics: '',
+    currentLyricsIndex: 0,
     volume: 1.0,
     isBuffering: false,
     progressMax: 100,
@@ -201,7 +202,7 @@ export const PlayerProvider = ({ children }) => {
             songCoverPmid: songCoverPmid,
             songCoverUrl: songCoverPmid ? `https://y.qq.com/music/photo_new/T002R800x800M000${songCoverPmid}.jpg` : '',
             songMid: state.songMid,
-            songLrc: newSongLrc,
+            songLyricsLines: parsedLyricsRef.current,
             statusText: state.statusText,
             currentTime: state.formattedCurrentTime,
             duration: state.formattedDuration,
@@ -293,11 +294,15 @@ export const PlayerProvider = ({ children }) => {
         let cancelled = false;
         const player = playerRef.current;
 
+        playerState.currentLyricsIndex = -1;
+        playerState.currentLyrics = '';
+        playerState.songLyricsLines = [];
+
         const cached = (player.midLyricsCache && player.midLyricsCache[mid]) || player.songLyrics;
         if (cached) {
             const ly = typeof cached === 'string' ? cached : String(cached);
             parsedLyricsRef.current = parseLrc(ly || '');
-            setPlayerState(prev => ({ ...prev, songLrc: ly }));
+            setPlayerState(prev => ({ ...prev, songLyricsLines: parsedLyricsRef.current }));
             return;
         }
 
@@ -305,7 +310,7 @@ export const PlayerProvider = ({ children }) => {
             if (cancelled) return;
             const txt = ly || '';
             parsedLyricsRef.current = parseLrc(txt);
-            setPlayerState(prev => ({ ...prev, songLrc: txt }));
+            setPlayerState(prev => ({ ...prev, songLyricsLines: parsedLyricsRef.current }));
         }).catch(e => {
             try { player._wsLog && player._wsLog('warn', 'LYRIC', '获取歌词失败', e); } catch {
                 // 忽略错误
@@ -326,11 +331,13 @@ export const PlayerProvider = ({ children }) => {
             const formattedTime = playerRef.current?._formatTime(currentTime) || '0:00';
             let currentLineText = '';
             const lyrics = parsedLyricsRef.current || [];
+            let currentLyricsIndex = -1;
 
             if (lyrics.length > 0) {
                 let foundLine = lyrics[0] || { text: '' };
                 for (let i = 0; i < lyrics.length; i++) {
                     if ((currentTime + 0.3) >= lyrics[i].time) {
+                        currentLyricsIndex = i;
                         foundLine = lyrics[i];
                     } else {
                         break;
@@ -344,6 +351,7 @@ export const PlayerProvider = ({ children }) => {
                 progressValue: currentTime,
                 currentTime: formattedTime,
                 currentLyrics: currentLineText,
+                currentLyricsIndex: currentLyricsIndex,
             }));
 
             const isValidDuration = audio?.duration > 0;
@@ -429,6 +437,7 @@ export const PlayerProvider = ({ children }) => {
         const handleDocumentClick = () => {
             const audio = audioRef.current;
             const audioCtx = audioCtxRef.current;
+            const playerState = playerStateRef.current;
 
             if (!analyserRef.current) {
                 initWebAudio();
@@ -439,7 +448,7 @@ export const PlayerProvider = ({ children }) => {
             }
 
             // 3. 强制尝试播放 <audio> 元素
-            if (audio) {
+            if (audio && playerState.songMid !== '') {
                 console.log('检测到用户点击，强制尝试恢复播放...');
                 // 确保我们设置了交互状态，以便其他逻辑（如播放器内部）可以判断
                 if (!hasUserInteracted) {

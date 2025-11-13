@@ -18,21 +18,21 @@ const processLyricContent = (lyric) => {
 // 预定义的动画数量
 const ANIMATION_COUNT = 5;
 // 动画持续时间（需要与 CSS 中的 duration 保持一致）
-const ANIMATION_DURATION_MS = 600; 
+const ANIMATION_DURATION_MS = 600;
 
 function MainText() {
     const { playerState } = usePlayer();
     const { isPlaying } = playerState;
-    
+
     // --- Refs 用于解决高度坍塌问题 ---
     const containerRef = useRef(null); // 指向父容器 .maintext-container
     // 新增：分别指向两个歌词 buffer，用于测量各自的高度
-    const lyricBuffer1Ref = useRef(null); 
-    const lyricBuffer2Ref = useRef(null); 
-    
+    const lyricBuffer1Ref = useRef(null);
+    const lyricBuffer2Ref = useRef(null);
+
     // 'buffer1' 或 'buffer2'，表示当前正在显示 新歌词 的文本框
     const [activeBuffer, setActiveBuffer] = useState('buffer1');
-    
+
     // 存储两个文本框的实际内容
     const [lyricText1, setLyricText1] = useState('');
     const [lyricText2, setLyricText2] = useState('');
@@ -47,29 +47,29 @@ function MainText() {
     useEffect(() => {
         const currentLyricsIndex = playerState.currentLyricsIndex;
         const newLyric = playerState.songLyricsLines[currentLyricsIndex]?.text;
-        
+
         let exitingBufferId = null;
 
         if (isPlaying && newLyric && currentLyricsIndex !== prevLyricsIndexRef.current) {
-            
+
             prevLyricsIndexRef.current = currentLyricsIndex;
-            
+
             // 每次切换歌词时，随机选择一个动画
             const newAnimationIndex = Math.floor(Math.random() * ANIMATION_COUNT);
             setRandomAnimationIndex(newAnimationIndex);
 
             const nextActiveBuffer = activeBuffer === 'buffer1' ? 'buffer2' : 'buffer1';
             exitingBufferId = activeBuffer;
-            
+
             const processedContent = processLyricContent(newLyric);
 
             // 将新歌词内容设置给即将进场的 buffer
             if (nextActiveBuffer === 'buffer1') {
-                setLyricText1(processedContent); 
+                setLyricText1(processedContent);
             } else {
                 setLyricText2(processedContent);
             }
-            
+
             // 切换 activeBuffer，触发进场动画
             setActiveBuffer(nextActiveBuffer);
         } else if (!newLyric) {
@@ -78,7 +78,7 @@ function MainText() {
             setLyricText1('');
             setLyricText2('');
         }
-        
+
         let timeoutId;
         if (exitingBufferId) {
             // 在退出动画结束后，清空旧歌词 buffer 的内容
@@ -99,77 +99,76 @@ function MainText() {
             }
         };
 
-    }, [playerState.currentLyricsIndex, playerState.songLyricsLines, isPlaying, activeBuffer]); 
-    
-    
+    }, [playerState.currentLyricsIndex, playerState.songLyricsLines, isPlaying, activeBuffer]);
+
+
     // --- 动态设置父元素高度 ---
     useEffect(() => {
         // 只有当正在播放歌词，并且至少有一个测量 Ref 已成功绑定时才执行
         const isPlayingLyricsContent = isPlaying && (lyricText1 || lyricText2);
 
         if (isPlayingLyricsContent && containerRef.current) {
-            
+
             // 获取两个 buffer 的实际高度，如果 ref 不存在则高度为 0
             const height1 = lyricBuffer1Ref.current?.offsetHeight || 0;
             const height2 = lyricBuffer2Ref.current?.offsetHeight || 0;
-            
+
             // 计算最大高度
             const maxHeight = Math.max(height1, height2);
 
             // 将最大高度应用给父元素
             containerRef.current.style.height = `${maxHeight}px`;
-            
+
         } else if (containerRef.current && !isPlayingLyricsContent) {
             // 当不播放歌词时，清除内联高度，让容器高度由非绝对定位元素自然撑起
-            containerRef.current.style.height = ''; 
+            containerRef.current.style.height = '';
         }
-        
+
         // 依赖项：歌词内容变化 (lyricText1/lyricText2) 会触发重新渲染，从而更新 ref 的 offsetHeight
-    }, [isPlaying, lyricText1, lyricText2]); 
+    }, [isPlaying, lyricText1, lyricText2]);
 
 
     // --- 渲染逻辑 ---
     const isPlayingLyrics = isPlaying && (lyricText1 || lyricText2);
 
     const containerClassName = `maintext-container ${isPlayingLyrics ? 'maintext-container-playing' : ''}`;
-    
+
     const animationEnterClassName = `maintext-lyrics-enter-${randomAnimationIndex}`;
     const animationExitClassName = `maintext-lyrics-exit-${randomAnimationIndex}`;
 
     return (
-        // 绑定父容器 Ref
-        <div className={containerClassName} ref={containerRef}>
+        <>
             {isPlayingLyrics ? (
                 <>
-                    {/* Buffer 1 */}
-                    <div 
-                        id="lyric-buffer-buffer1" 
-                        className={`maintext maintext-lyrics ${
-                            activeBuffer === 'buffer1' ? animationEnterClassName : animationExitClassName
-                        }`}
-                        // 绑定对应的 Ref
-                        ref={lyricBuffer1Ref} 
-                    >
-                        {lyricText1}
-                    </div>
-                    
-                    {/* Buffer 2 */}
-                    <div 
-                         id="lyric-buffer-buffer2" 
-                         className={`maintext maintext-lyrics ${
-                            activeBuffer === 'buffer2' ? animationEnterClassName : animationExitClassName
-                        }`}
-                        // 绑定对应的 Ref
-                        ref={lyricBuffer2Ref}
-                    >
-                        {lyricText2}
+                    {/* // 绑定父容器 Ref */}
+                    <div className={containerClassName} ref={containerRef}>
+
+                        {/* Buffer 1 */}
+                        <div
+                            id="lyric-buffer-buffer1"
+                            className={`maintext maintext-lyrics ${activeBuffer === 'buffer1' ? animationEnterClassName : animationExitClassName
+                                }`}
+                            // 绑定对应的 Ref
+                            ref={lyricBuffer1Ref}
+                        >
+                            {lyricText1}
+                        </div>
+
+                        {/* Buffer 2 */}
+                        <div
+                            id="lyric-buffer-buffer2"
+                            className={`maintext maintext-lyrics ${activeBuffer === 'buffer2' ? animationEnterClassName : animationExitClassName
+                                }`}
+                            // 绑定对应的 Ref
+                            ref={lyricBuffer2Ref}
+                        >
+                            {lyricText2}
+                        </div>
+
                     </div>
                 </>
-            ) : (
-                // 非播放状态显示内容
-                <div className="maintext">MeT-Music Player</div>
-            )}
-        </div>
+            ) : (<div className={containerClassName} ref={containerRef}></div>)}
+        </>
     );
 }
 

@@ -26,8 +26,9 @@ function MainText() {
     
     // --- Refs 用于解决高度坍塌问题 ---
     const containerRef = useRef(null); // 指向父容器 .maintext-container
-    // 指向歌词 buffer，用于测量其高度
-    const lyricBufferRef = useRef(null); 
+    // 新增：分别指向两个歌词 buffer，用于测量各自的高度
+    const lyricBuffer1Ref = useRef(null); 
+    const lyricBuffer2Ref = useRef(null); 
     
     // 'buffer1' 或 'buffer2'，表示当前正在显示 新歌词 的文本框
     const [activeBuffer, setActiveBuffer] = useState('buffer1');
@@ -83,8 +84,10 @@ function MainText() {
             // 在退出动画结束后，清空旧歌词 buffer 的内容
             timeoutId = setTimeout(() => {
                 if (exitingBufferId === 'buffer1') {
+                    // 当 lyricText1 被清空时，它会触发高度重新计算 (useEffect)
                     setLyricText1('');
                 } else {
+                    // 当 lyricText2 被清空时，它会触发高度重新计算 (useEffect)
                     setLyricText2('');
                 }
             }, ANIMATION_DURATION_MS);
@@ -101,24 +104,27 @@ function MainText() {
     
     // --- 动态设置父元素高度 ---
     useEffect(() => {
-        // 只有当正在播放歌词，并且测量 Ref 已成功绑定时才执行
+        // 只有当正在播放歌词，并且至少有一个测量 Ref 已成功绑定时才执行
         const isPlayingLyricsContent = isPlaying && (lyricText1 || lyricText2);
 
-        if (isPlayingLyricsContent && containerRef.current && lyricBufferRef.current) {
+        if (isPlayingLyricsContent && containerRef.current) {
             
-            // 获取当前 active buffer 的实际高度
-            const childHeight = lyricBufferRef.current.offsetHeight;
+            // 获取两个 buffer 的实际高度，如果 ref 不存在则高度为 0
+            const height1 = lyricBuffer1Ref.current?.offsetHeight || 0;
+            const height2 = lyricBuffer2Ref.current?.offsetHeight || 0;
             
-            // 将高度应用给父元素，解决高度坍塌
-            containerRef.current.style.height = `${childHeight}px`;
+            // 计算最大高度
+            const maxHeight = Math.max(height1, height2);
+
+            // 将最大高度应用给父元素
+            containerRef.current.style.height = `${maxHeight}px`;
             
         } else if (containerRef.current && !isPlayingLyricsContent) {
             // 当不播放歌词时，清除内联高度，让容器高度由非绝对定位元素自然撑起
             containerRef.current.style.height = ''; 
         }
         
-        // 依赖项：歌词内容变化和播放状态
-        // 歌词内容（lyricText1/lyricText2）变化是触发重新计算高度的核心信号
+        // 依赖项：歌词内容变化 (lyricText1/lyricText2) 会触发重新渲染，从而更新 ref 的 offsetHeight
     }, [isPlaying, lyricText1, lyricText2]); 
 
 
@@ -141,7 +147,8 @@ function MainText() {
                         className={`maintext maintext-lyrics ${
                             activeBuffer === 'buffer1' ? animationEnterClassName : animationExitClassName
                         }`}
-                        ref={activeBuffer === 'buffer1' ? lyricBufferRef : null} 
+                        // 绑定对应的 Ref
+                        ref={lyricBuffer1Ref} 
                     >
                         {lyricText1}
                     </div>
@@ -152,14 +159,15 @@ function MainText() {
                          className={`maintext maintext-lyrics ${
                             activeBuffer === 'buffer2' ? animationEnterClassName : animationExitClassName
                         }`}
-                        ref={activeBuffer === 'buffer2' ? lyricBufferRef : null}
+                        // 绑定对应的 Ref
+                        ref={lyricBuffer2Ref}
                     >
                         {lyricText2}
                     </div>
                 </>
             ) : (
                 // 非播放状态显示内容
-                <div className="maintext"></div>
+                <div className="maintext">MeT-Music Player</div>
             )}
         </div>
     );

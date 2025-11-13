@@ -1,23 +1,22 @@
 .maintext-container {
-    width: 100%;
-    /* padding: 0 15vw; */
-    /* position: fixed; */
-    /* top: 50%; */
-    /* transform: translateY(-50%); */
+    width: 100vw;
     margin: 0 auto;
     text-align: center;
     position: relative;
+    
+    /* --- 关键修改: 启用 Flexbox 用于居中 --- */
+    display: flex; /* 启用 Flex 布局 */
+    align-items: center; /* 垂直居中对齐 */
+    justify-content: center; /* 水平居中对齐 */
+    /* 容器必须包裹子元素，但由于子元素是绝对定位，
+       我们通过 JS 动态设置高度，这里 Flexbox 主要是用于居中 */
+    overflow: hidden;
 }
 
-/* .maintext-container-playing {
-    transition: all 1s ease-in-out;
-    transform: translateY(-70%);
-} */
-
-/* --- 主文本样式 --- */
+/* --- 主文本样式 (保持不变) --- */
 .maintext {
     font-family: var(--maintext-font);
-    font-size: 4em;
+    font-size: 6em;
     font-weight: bold;
     background: linear-gradient(to bottom left,
             rgba(255, 255, 255, 0.7),
@@ -25,7 +24,6 @@
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
-    /* transition: all 1s ease-in-out; */
     position: relative;
     display: inline-block;
 }
@@ -34,16 +32,52 @@
 .maintext-lyrics {
     transition: none;
     white-space: pre-wrap;
-    position: absolute;
-    top: 0;
+    /* 保持绝对定位，使其脱离文档流，不影响父容器的高度，
+       且能互相堆叠，但需要移除 top: 0，因为我们现在依赖 Flexbox 或 Grid 居中 */
+    position: absolute; 
+    
+    /* 移除 top/bottom/transform 居中，改为使用 left/right 或 width + margin */
+    /* top: 0; <--- 移除! */ 
     left: 10%;
-    /* transform: translate(-50%, -50%); */
     width: 80%;
+    
     text-align: center;
     opacity: 0;
+    
+    /* --- 关键修改: 垂直居中 --- */
+    /* 重新使用 left/right/top/bottom 配合 transform: translate(-50%, -50%) 
+       来实现绝对定位下的居中，这是最可靠的。 */
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    
+    /* 注意：由于动画中已经使用了 transform (如 scale/rotate)，
+       如果它们没有包含 translate，这里的 transform 会被覆盖。
+       我们需要确保动画中的 transform 包含 translate(-50%, -50%) 
+       或在动画结束状态 (forwards) 结束后重新应用。 
+       最简单的方法是**将歌词 div的绝对定位居中属性设置在父容器上**，
+       或者**在动画关键帧的 `to` 状态中包含居中 transform**。*/
+
+    /* 为了兼容性，在动画的 to 状态中确保 transform 的居中效果。
+       如果不想修改所有动画，另一种方法是放弃绝对定位，使用 Flexbox 居中，
+       但动画叠加会变得复杂。
+       鉴于您的需求是“始终居中”，我们应该在动画的 `to` 状态中包含居中 transform。 
+    */
+    
+    /* 暂时先保留这里的居中，然后**修改动画的关键帧** */
 }
 
-/* --- 动画关键帧和类定义 --- */
+/*
+    --- 动画修改说明 ---
+    为了让歌词始终在居中位置展示，`maintext-lyrics` 的 CSS 中
+    设置了 `top: 50%; left: 50%; transform: translate(-50%, -50%);`。
+    
+    为了不让动画覆盖这个居中定位，所有动画关键帧的 `to` 状态 (即动画结束时的状态) 
+    **必须**包含 `transform: translate(-50%, -50%)` 
+    以及相应的非居中效果 (如 `scale(1)` 或 `rotate(0deg)`)。
+    
+    --- 下面是修改后的动画 CSS ---
+*/
 
 /* ---------------------------------------------------- */
 /* 动画 0: 缩放、模糊淡入 / 缩放、模糊淡出 */
@@ -58,13 +92,15 @@
     from {
         opacity: 0;
         filter: blur(20px);
-        transform: scale(0.4);
+        /* 包含居中效果 */
+        transform: translate(-50%, -50%) scale(0.4); 
     }
 
     to {
         opacity: 1;
         filter: blur(0);
-        transform: scale(1);
+        /* 包含居中效果 */
+        transform: translate(-50%, -50%) scale(1);
     }
 }
 
@@ -77,13 +113,15 @@
     from {
         opacity: 1;
         filter: blur(0);
-        transform: scale(1);
+        /* 包含居中效果 */
+        transform: translate(-50%, -50%) scale(1);
     }
 
     to {
         opacity: 0;
         filter: blur(20px);
-        transform: scale(0.4);
+        /* 包含居中效果 */
+        transform: translate(-50%, -50%) scale(0.4);
     }
 }
 
@@ -100,13 +138,15 @@
     from {
         opacity: 0;
         filter: blur(10px);
-        transform: scaleX(1.7) rotate(5deg);
+        /* 包含居中效果 */
+        transform: translate(-50%, -50%) scaleX(1.7) rotate(5deg);
     }
 
     to {
         opacity: 1;
         filter: blur(0);
-        transform: scaleX(1) rotate(0deg);
+        /* 包含居中效果 */
+        transform: translate(-50%, -50%) scaleX(1) rotate(0deg);
     }
 }
 
@@ -119,13 +159,15 @@
     from {
         opacity: 1;
         filter: blur(0);
-        transform: scaleX(1) rotate(0deg);
+        /* 包含居中效果 */
+        transform: translate(-50%, -50%) scaleX(1) rotate(0deg);
     }
 
     to {
         opacity: 0;
         filter: blur(10px);
-        transform: scaleX(0.5) rotate(-5deg);
+        /* 包含居中效果 */
+        transform: translate(-50%, -50%) scaleX(0.5) rotate(-5deg);
     }
 }
 
@@ -143,13 +185,15 @@
     from {
         opacity: 0;
         filter: blur(10px);
-        transform: rotate(-5deg);
+        /* 包含居中效果 */
+        transform: translate(-50%, -50%) rotate(-5deg);
     }
 
     to {
         opacity: 1;
         filter: blur(0);
-        transform: rotate(0deg);
+        /* 包含居中效果 */
+        transform: translate(-50%, -50%) rotate(0deg);
     }
 }
 
@@ -162,13 +206,15 @@
     from {
         opacity: 1;
         filter: blur(0);
-        transform: rotate(0deg);
+        /* 包含居中效果 */
+        transform: translate(-50%, -50%) rotate(0deg);
     }
 
     to {
         opacity: 0;
         filter: blur(10px);
-        transform: rotate(5deg);
+        /* 包含居中效果 */
+        transform: translate(-50%, -50%) rotate(5deg);
     }
 }
 
@@ -185,13 +231,15 @@
     from {
         opacity: 0;
         filter: blur(10px);
-        transform: rotate(5deg);
+        /* 包含居中效果 */
+        transform: translate(-50%, -50%) rotate(5deg);
     }
 
     to {
         opacity: 1;
         filter: blur(0);
-        transform: rotate(0deg);
+        /* 包含居中效果 */
+        transform: translate(-50%, -50%) rotate(0deg);
     }
 }
 
@@ -204,13 +252,15 @@
     from {
         opacity: 1;
         filter: blur(0);
-        transform: rotate(0deg);
+        /* 包含居中效果 */
+        transform: translate(-50%, -50%) rotate(0deg);
     }
 
     to {
         opacity: 0;
         filter: blur(10px);
-        transform: rotate(-5deg);
+        /* 包含居中效果 */
+        transform: translate(-50%, -50%) rotate(-5deg);
     }
 }
 
@@ -227,11 +277,15 @@
     from {
         opacity: 0;
         filter: blur(10px);
+        /* 包含居中效果 */
+        transform: translate(-50%, -50%);
     }
 
     to {
         opacity: 1;
         filter: blur(0);
+        /* 包含居中效果 */
+        transform: translate(-50%, -50%);
     }
 }
 
@@ -244,10 +298,14 @@
     from {
         opacity: 1;
         filter: blur(0);
+        /* 包含居中效果 */
+        transform: translate(-50%, -50%);
     }
 
     to {
         opacity: 0;
         filter: blur(10px);
+        /* 包含居中效果 */
+        transform: translate(-50%, -50%);
     }
 }

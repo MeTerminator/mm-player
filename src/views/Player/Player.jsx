@@ -13,7 +13,6 @@ function Player() {
                 <MainText />
                 <SongInfo />
             </div>
-
         </>
     );
 }

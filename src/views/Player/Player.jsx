@@ -1,7 +1,8 @@
 import Background from '../../components/Background/Background';
 import Visualizer from '../../components/Visualizer/Visualizer';
-import MainText from '../../components/MainText/MainText';
+import Lyrics from '../../components/Lyrics/Lyrics';
 import SongInfo from '../../components/SongInfo/SongInfo';
+import LyricsShadow from '../../components/LyricsShadow/LyricsShadow';
 import './Player.css';
 
 function Player() {
@@ -10,7 +11,11 @@ function Player() {
             <Background />
             <Visualizer />
             <div className="player-container">
-                <MainText />
+                <div className="player-lyrics-container">
+                    <Lyrics />
+                    <LyricsShadow />
+                </div>
+
                 <SongInfo />
             </div>
         </>

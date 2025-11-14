@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { usePlayer } from '../../context/PlayerContext';
-import './MainText.css';
+import './Lyrics.css';
 
 // 检查是否全中文（用于换行）
 const shouldReplaceSpaceWithNewline = (str) => {
@@ -20,13 +20,13 @@ const ANIMATION_COUNT = 5;
 // 动画持续时间（需要与 CSS 中的 duration 保持一致）
 const ANIMATION_DURATION_MS = 600;
 
-function MainText() {
+function Lyrics() {
     const { playerState } = usePlayer();
     const { isPlaying } = playerState;
 
     // --- Refs 用于解决高度坍塌问题 ---
     const containerRef = useRef(null); // 指向父容器 .maintext-container
-    // 新增：分别指向两个歌词 buffer，用于测量各自的高度
+    // 分别指向两个歌词 buffer，用于测量各自的高度
     const lyricBuffer1Ref = useRef(null);
     const lyricBuffer2Ref = useRef(null);
 
@@ -43,7 +43,7 @@ function MainText() {
     // 引用存储
     const prevLyricsIndexRef = useRef(-1);
 
-    // --- 歌词和双文本框切换逻辑 (保持不变) ---
+    // --- 歌词和双文本框切换逻辑 ---
     useEffect(() => {
         const currentLyricsIndex = playerState.currentLyricsIndex;
         const newLyric = playerState.songLyricsLines[currentLyricsIndex]?.text;
@@ -131,24 +131,22 @@ function MainText() {
     // --- 渲染逻辑 ---
     const isPlayingLyrics = isPlaying && (lyricText1 || lyricText2);
 
-    const containerClassName = `maintext-container ${isPlayingLyrics ? 'maintext-container-playing' : ''}`;
+    const containerClassName = `lyrics-container ${isPlayingLyrics ? 'lyrics-container-playing' : ''}`;
 
-    const animationEnterClassName = `maintext-lyrics-enter-${randomAnimationIndex}`;
-    const animationExitClassName = `maintext-lyrics-exit-${randomAnimationIndex}`;
+    const animationEnterClassName = `lyrics-enter-${randomAnimationIndex}`;
+    const animationExitClassName = `lyrics-exit-${randomAnimationIndex}`;
 
     return (
         <>
             {isPlayingLyrics ? (
                 <>
-                    {/* // 绑定父容器 Ref */}
                     <div className={containerClassName} ref={containerRef}>
 
                         {/* Buffer 1 */}
                         <div
                             id="lyric-buffer-buffer1"
-                            className={`maintext maintext-lyrics ${activeBuffer === 'buffer1' ? animationEnterClassName : animationExitClassName
+                            className={`lyrics lyrics-buffer ${activeBuffer === 'buffer1' ? animationEnterClassName : animationExitClassName
                                 }`}
-                            // 绑定对应的 Ref
                             ref={lyricBuffer1Ref}
                         >
                             {lyricText1}
@@ -157,9 +155,8 @@ function MainText() {
                         {/* Buffer 2 */}
                         <div
                             id="lyric-buffer-buffer2"
-                            className={`maintext maintext-lyrics ${activeBuffer === 'buffer2' ? animationEnterClassName : animationExitClassName
+                            className={`lyrics lyrics-buffer ${activeBuffer === 'buffer2' ? animationEnterClassName : animationExitClassName
                                 }`}
-                            // 绑定对应的 Ref
                             ref={lyricBuffer2Ref}
                         >
                             {lyricText2}
@@ -172,4 +169,4 @@ function MainText() {
     );
 }
 
-export default MainText;
+export default Lyrics;

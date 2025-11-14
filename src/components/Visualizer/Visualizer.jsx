@@ -46,7 +46,7 @@ function Visualizer() {
                 // 绘制逻辑（渐变和圆顶）
                 const gradient = ctx.createLinearGradient(x, 0, x, y);
                 gradient.addColorStop(0, "rgba(255,255,255,0.6)");
-                gradient.addColorStop(0.7, "rgba(255,255,255,0.3)");
+                gradient.addColorStop(0.7, "rgba(255,255,255,0.2)");
                 gradient.addColorStop(1, "rgba(255,255,255,0)");
 
                 ctx.fillStyle = gradient;

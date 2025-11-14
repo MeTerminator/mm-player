@@ -20,6 +20,7 @@
   max-height: 30%;
   max-width: 70%;
   margin: 0 auto;
+  transition: opacity 0.5s ease-in-out;
 }
 
 /* .song-container.visible {
@@ -27,7 +28,7 @@
 } */
 
 .song-container.hidden {
-  margin-top: 100vh;
+  opacity: 0;
 }
 
 .song-container-box {

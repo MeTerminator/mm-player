@@ -6,8 +6,16 @@
     height: 100vh;
 }
 
-.maintext-container {
+.player-lyrics-container {
     margin: auto 0;
+    position: relative;
+}
+
+.lyrics-shadow-container {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
 }
 
 .song-container {

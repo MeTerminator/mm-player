@@ -14,7 +14,7 @@
 /* --- 歌词文本框样式 --- */
 .lyrics {
     font-family: var(--lyrics-font);
-    font-size: 5em;
+    font-size: 8em;
     font-weight: bold;
     background: linear-gradient(to bottom left,
             rgba(255, 255, 255, 0.7),
@@ -35,6 +35,24 @@
     transform: translate(-50%, -50%);
     overflow: hidden;
     scrollbar-width: none;
+}
+
+@media (max-width: 1200px) or (max-height: 800px) {
+    .lyrics {
+        font-size: 6em;
+    }
+}
+
+@media (max-width: 1000px) {
+    .lyrics {
+        font-size: 4em;
+    }
+}
+
+@media (max-width: 800px) {
+    .lyrics {
+        font-size: 3em;
+    }
 }
 
 /* ---------------------------------------------------- */

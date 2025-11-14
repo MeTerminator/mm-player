@@ -43,6 +43,24 @@ function Lyrics() {
     // 引用存储
     const prevLyricsIndexRef = useRef(-1);
 
+    // 用于存储窗口宽度，并作为依赖项触发高度重新计算
+    const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+
+    // 监听窗口大小变化
+    useEffect(() => {
+        const handleResize = () => {
+            // 只更新宽度，触发依赖于 windowWidth 的 useEffect
+            setWindowWidth(window.innerWidth);
+        };
+
+        window.addEventListener('resize', handleResize);
+
+        // 清理函数：在组件卸载时移除监听器
+        return () => {
+            window.removeEventListener('resize', handleResize);
+        };
+    }, []); // 仅在挂载和卸载时执行
+
     // --- 歌词和双文本框切换逻辑 ---
     useEffect(() => {
         const currentLyricsIndex = playerState.currentLyricsIndex;
@@ -102,10 +120,13 @@ function Lyrics() {
     }, [playerState.currentLyricsIndex, playerState.songLyricsLines, isPlaying, activeBuffer]);
 
 
-    // --- 动态设置父元素高度 ---
+    // --- 动态设置父元素高度 (新增 windowWidth 依赖项) ---
     useEffect(() => {
         // 只有当正在播放歌词，并且至少有一个测量 Ref 已成功绑定时才执行
         const isPlayingLyricsContent = isPlaying && (lyricText1 || lyricText2);
+
+        // **注意：** 即使没有歌词内容，当窗口大小变化时，也需要重新执行清理高度的逻辑，
+        // 所以我们让这个 effect 总是执行，但只在有内容时计算高度。
 
         if (isPlayingLyricsContent && containerRef.current) {
 
@@ -120,12 +141,12 @@ function Lyrics() {
             containerRef.current.style.height = `${maxHeight}px`;
 
         } else if (containerRef.current && !isPlayingLyricsContent) {
-            // 当不播放歌词时，清除内联高度，让容器高度由非绝对定位元素自然撑起
+            // 当不播放歌词时，或窗口大小变化但无内容时，清除内联高度
             containerRef.current.style.height = '';
         }
 
         // 依赖项：歌词内容变化 (lyricText1/lyricText2) 会触发重新渲染，从而更新 ref 的 offsetHeight
-    }, [isPlaying, lyricText1, lyricText2]);
+    }, [isPlaying, lyricText1, lyricText2, windowWidth]);
 
 
     // --- 渲染逻辑 ---

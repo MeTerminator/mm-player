@@ -9,7 +9,7 @@
   background-repeat: repeat;
   background-size: 10%;
   animation: background-animation 60s ease-in-out infinite;
-  filter: blur(25px) saturate(1.5) contrast(1.2) brightness(0.8);
+  filter: blur(25px) saturate(1.5) contrast(1.2) brightness(0.5);
 }
 
 .backgraound-top-layer {

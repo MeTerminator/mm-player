@@ -1,6 +1,9 @@
 import { usePlayer } from '../../context/PlayerContext';
 import './LyricsShadow.css';
 
+// ---------------------------------------------------
+// 核心词汇列表
+// ---------------------------------------------------
 const SPECIAL_WORDS = [
     'ecstasy', 'bliss', 'euphoria', 'overjoy', 'elate', 'jubilant', 'rapture', 'thrilled', 
     'love', 'adore', 'beloved', 'darling', 'honey', 'sweetheart', 'cherish', 'tender', 
@@ -31,12 +34,49 @@ const SPECIAL_WORDS = [
     'gotta', 'yeah', 'oh', 'baby', 'lady', 'man', 'woman', 'story', 'moment', 'destiny'
 ];
 
+// ---------------------------------------------------
+// 排除词汇列表 (功能性/非核心词汇)
+// ---------------------------------------------------
+const EXCLUDED_WORDS = [
+    // 冠词
+    'a', 'an', 'the',
+    // 人称代词/物主代词/反身代词/指示代词/不定代词 (常见)
+    'i', 'me', 'my', 'mine', 'myself', 
+    'you', 'your', 'yours', 'yourself', 'yourselves', 
+    'he', 'him', 'his', 'himself', 
+    'she', 'her', 'hers', 'herself', 
+    'it', 'its', 'itself', 
+    'we', 'us', 'our', 'ours', 'ourselves', 
+    'they', 'them', 'their', 'theirs', 'themselves',
+    'this', 'that', 'these', 'those',
+    'one', 'some', 'any', 'all', 'every', 'other', 'another', 'nothing', 'something',
+    // 助动词/情态动词
+    'do', 'did', 'does', 'don\'t', 'doesn\'t', 'didn\'t',
+    'have', 'has', 'had', 'haven\'t', 'hasn\'t', 'hadn\'t',
+    'am', 'is', 'are', 'was', 'were', 'be', 'being', 'been',
+    'will', 'would', 'can', 'could', 'may', 'might', 'must', 'shall', 'should', 'need', 'dare',
+    // 介词
+    'of', 'in', 'on', 'at', 'to', 'for', 'with', 'by', 'from', 'up', 'down', 'out', 'into', 'over', 'under', 'through', 'about', 'before', 'after', 'since', 'until', 'among', 'across', 'behind', 'beside', 'between', 'except', 'without',
+    // 连词
+    'and', 'but', 'or', 'nor', 'so', 'yet', 'if', 'because', 'though', 'although', 'while', 'when', 'where',
+    // 常用副词
+    'just', 'only', 'too', 'very', 'not', 'no', 'then', 'now', 'well', 'how', 'why',
+];
+
+/**
+ * 检查单词是否为排除词汇
+ */
+function isExcludedWord(word) {
+    // 排除词汇列表是小写的，所以 word 必须是小写
+    return EXCLUDED_WORDS.includes(word);
+}
 
 /**
  * 将字符串的首字母转换为大写。
  */
 function toTitleCase(str) {
     if (!str) return '';
+    // 确保返回的字符串除了首字母，其余都是小写
     return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }
 
@@ -52,7 +92,7 @@ function isPureEnglish(text) {
 
 /**
  * 根据逻辑获取用于 Shadow 的词汇或字母，并确保首字母大写。
- * 包含词根匹配逻辑。
+ * 包含词根匹配、排除词汇、取最长词逻辑。
  */
 function getShadowWord(currentLyrics) {
     if (!currentLyrics) {
@@ -63,16 +103,23 @@ function getShadowWord(currentLyrics) {
     const trimmedLyrics = currentLyrics.trim();
 
     if (isPureEnglish(trimmedLyrics)) {
-        // 分割单词，允许 ' 作为单词的一部分
+        // 1. 分割并预处理单词
         const words = trimmedLyrics
             .toLowerCase()
-            .split(/[^a-z0-9']/g) 
-            .filter(word => word.length > 0); 
+            .split(/[^a-z0-9']/g) // 分割，允许 ' 作为单词的一部分
+            .filter(word => word.length > 0 && word !== "'"); // 过滤空串和单独的撇号
 
+        if (words.length === 0) {
+            return ''; // 没有有效单词
+        }
+        
         let foundEmotionalWord = null;
 
-        // 词根匹配：检查歌词中的单词是否以任一情感词根开头
+        // 2. 词根匹配：检查歌词中的单词是否以任一情感词根开头 (最高优先级)
         for (const word of words) {
+            // 排除长度小于3的词汇进行词根匹配，避免 'i', 'my', 'me' 等被误判
+            if (word.length < 3) continue; 
+
             const rootMatch = SPECIAL_WORDS.find(root => word.startsWith(root));
             if (rootMatch) {
                 foundEmotionalWord = word; // 返回歌词中实际的单词 (如 'lovers', 'loving')
@@ -83,13 +130,38 @@ function getShadowWord(currentLyrics) {
         if (foundEmotionalWord) {
             shadowCandidate = foundEmotionalWord; 
         } else {
-            shadowCandidate = words.length > 0 ? words[0] : '';
+            // 3. 正常流程：排除词汇后取第一个非排除词 (次高优先级)
+            let firstNonExcludedWord = null;
+            for (const word of words) {
+                if (!isExcludedWord(word)) {
+                    firstNonExcludedWord = word;
+                    break;
+                }
+            }
+
+            if (firstNonExcludedWord) {
+                shadowCandidate = firstNonExcludedWord;
+            } else {
+                // 4. 所有单词都被排除：取最长的单词 (最低优先级)
+                
+                // 排除一些常见的缩写，因为它们可能很长但没有意义 (如 'don\'t', 'I\'m' 等)
+                const candidateWords = words.filter(word => 
+                    word.length > 0 && 
+                    !['i\'m', 'you\'re', 'it\'s', 'we\'re', 'they\'re', 'i\'ll', 'you\'ll', 'we\'ll', 'they\'ll', 'i\'ve', 'you\'ve', 'we\'ve', 'they\'ve'].includes(word)
+                );
+
+                if (candidateWords.length > 0) {
+                    // 使用 reduce 找出最长的单词
+                    shadowCandidate = candidateWords.reduce((a, b) => (a.length >= b.length ? a : b));
+                }
+            }
         }
     } else if (trimmedLyrics.length > 0) {
-        // 非纯英文，取第一个字符
+        // 非纯英文，取第一个字符 (保持不变)
         shadowCandidate = trimmedLyrics[0];
     }
     
+    // 5. 格式化并返回
     return toTitleCase(shadowCandidate);
 }
 

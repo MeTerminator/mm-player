@@ -12,9 +12,9 @@
     z-index: 100;
     font-family: var(--lyrics-font);
     font-weight: bold;
-    color: rgba(255, 255, 255, 0.1);
+    color: rgba(0, 0, 0, 0.1);
     filter: blur(1px);
-    text-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+    text-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
     opacity: 0;
     overflow: hidden;
 }

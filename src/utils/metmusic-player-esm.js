@@ -23,8 +23,9 @@ class MeTMusicPlayer {
         this.serverLocalTimeDiff = 0; // serverTimeMs - localTimeMs
 
         // 缓存
-        this.midUrlCache = {};      // { mid: { url, track_info } }
+        this.midUrlCache = {};      // { mid: { url, data } }
         this.midLyricsCache = {};  // { mid: lyricsText }
+        this.pmidColorCache = {}; // { pmid: {} }
 
         // 状态
         this.isSeekPending = false;
@@ -47,6 +48,7 @@ class MeTMusicPlayer {
         // song info
         this.songData = null;
         this.songLyrics = null;
+        this.songCoverColor = null;
         this.isBuffering = false;
 
         // throttle trigger onChange
@@ -228,7 +230,9 @@ class MeTMusicPlayer {
             isBuffering: this.isBuffering,
             formattedCurrentTime: this._formatTime(this.audioPlayer.currentTime),
             formattedDuration: this._formatTime(this.audioPlayer.duration),
-            statusText: statusText
+            statusText: statusText,
+            songLyric: this.songLyrics,
+            songCoverColor: this.songCoverColor,
         };
     }
 
@@ -285,7 +289,7 @@ class MeTMusicPlayer {
                     const musicStartTs = payload.systemTime - (payload.currentTime || 0) * 1000;
 
                     this.musicStatus = newStatus;
-                    this.musicMid = newMid;
+                    // this.musicMid = newMid;
 
                     // 更新播放状态
                     this._updateMusicStatus(newStatus, newMid, musicStartTs);
@@ -340,11 +344,11 @@ class MeTMusicPlayer {
     _updateMusicStatus(currentStatus, currentMid, currentStartTs) {
         // currentStartTs 单位：ms
         if (currentStatus) {
-            const isNewSong = currentMid !== this.lastMusicMid;
+            const isNewSong = currentMid !== this.songMid;
             const isTimeDrifted = Math.abs(currentStartTs - this.lastMusicStartTs) > 500;
 
             this.lastMusicStartTs = currentStartTs;
-            this.lastMusicMid = currentMid;
+            // this.lastMusicMid = currentMid;
 
             if (isNewSong || isTimeDrifted) {
                 // 计算预加载与延迟（尽量在歌曲播放前加载完）
@@ -382,18 +386,17 @@ class MeTMusicPlayer {
     async _getSongUrl(mid) {
         if (!mid) return "";
         if (this.midUrlCache[mid] && this.midUrlCache[mid].url) {
+            this.songData = this.midUrlCache[mid].data;
             return this.midUrlCache[mid].url;
         }
         try {
             const response = await fetch(`https://music.met6.top:444/api/song/url/v1/?id=${mid}&level=hq`);
             const data = await response.json();
-            // data.data[0] 包含 url 与 track_info
             const entry = data.data?.[0] || null;
             const url = entry?.url || "";
-            const track_info = entry?.track_info || entry?.track || null;
             this.midUrlCache[mid] = {
                 url: url,
-                track_info: track_info
+                data: entry
             };
             // 保持 songData 的基本信息（不覆盖现有 lyrics）
             if (!this.songData || this.songData.mid !== mid) {
@@ -421,6 +424,21 @@ class MeTMusicPlayer {
                 this.songData.lyrics = lyrics;
             }
             return lyrics;
+        } catch (e) {
+            this._wsLog('error', 'FETCH', '获取歌词失败', e);
+            return "";
+        }
+    }
+
+    async _getPmidColor(pmid) {
+        if (!pmid) return "";
+        if (this.pmidColorCache[pmid]) return this.pmidColorCache[pmid];
+        try {
+            const response = await fetch(`https://music.met6.top:444/api/get_color.php?pmid=${pmid}`);
+            const colorData = await response.json();
+            this.pmidColorCache[pmid] = colorData;
+            this.songCoverColor = colorData;
+            return colorData;
         } catch (e) {
             this._wsLog('error', 'FETCH', '获取歌词失败', e);
             return "";
@@ -461,6 +479,13 @@ class MeTMusicPlayer {
                 return;
             }
 
+            // 获取歌词 和 封面颜色
+            const pmid = this.songData?.track_info?.album?.pmid || "";
+            const lyrics = await this._getSongLyrics(mid);
+            const colorData = await this._getPmidColor(pmid);
+            this.songLyrics = lyrics;
+            this.songCoverColor = colorData;
+
             // --- Safari 修复补丁 2: Blob 加载避免卡顿 ---
             let finalUrl = songUrl;
             if (/^https?:/.test(songUrl) && /^((?!chrome|firefox).)*safari/i.test(navigator.userAgent)) {
@@ -480,6 +505,7 @@ class MeTMusicPlayer {
             this.currentServerStartTime = startTimeMs;
             this.musicMid = mid;
             this.isSeekPending = true;
+            this.lastMusicMid = mid;
 
             // --- Safari 修复补丁 3: 保证 loadeddata 后再播放 ---
             const onLoaded = async () => {

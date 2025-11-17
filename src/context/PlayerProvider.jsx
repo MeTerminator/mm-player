@@ -19,6 +19,8 @@ const INITIAL_PLAYER_STATE = {
     songCoverUrl: '',
     songMid: '',
     songLyricsLines: [],
+    songCoverColorDominant: '',
+    songCoverColorPalette: [],
     statusText: '未连接',
     currentTime: '0:00',
     duration: '0:00',
@@ -124,7 +126,7 @@ export const PlayerProvider = ({ children }) => {
 
     const [playerState, setPlayerState] = useState(INITIAL_PLAYER_STATE);
     const [isAudioInitialized, setIsAudioInitialized] = useState(false);
-    
+
     // 跟踪是否已经尝试过首次用户交互
     const [hasUserInteracted, setHasUserInteracted] = useState(false);
 
@@ -141,8 +143,8 @@ export const PlayerProvider = ({ children }) => {
 
         try {
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            audioCtxRef.current = audioCtx; 
-            
+            audioCtxRef.current = audioCtx;
+
             // 确保 context 已连接
             if (audioCtx.state !== 'closed') {
                 analyser = audioCtx.createAnalyser();
@@ -156,11 +158,11 @@ export const PlayerProvider = ({ children }) => {
 
                 audioDataArrayRef.current = dataArray;
                 analyserRef.current = analyser;
-                
-                setIsAudioInitialized(true); 
+
+                setIsAudioInitialized(true);
                 console.log("Web Audio API initialized and connected.");
             } else {
-                 console.warn("Web Audio API failed to initialize: context closed.");
+                console.warn("Web Audio API failed to initialize: context closed.");
             }
 
         } catch (e) {
@@ -170,9 +172,9 @@ export const PlayerProvider = ({ children }) => {
             analyserRef.current = null;
             audioDataArrayRef.current = null;
             audioCtxRef.current = null;
-            setIsAudioInitialized(false); 
+            setIsAudioInitialized(false);
         }
-    }, [setIsAudioInitialized]); 
+    }, [setIsAudioInitialized]);
 
     const handlePlayerStateChange = useCallback((playerInstance) => {
         if (!playerInstance || !playerInstance.audioPlayer) return;
@@ -196,13 +198,15 @@ export const PlayerProvider = ({ children }) => {
 
         const newPlayerState = {
             isPlaying: state.isPlaying,
-            songName: currentPlayerRef?.songData?.track_info?.title || '',
-            songSinger: currentPlayerRef?.songData?.track_info?.singer?.map(s => s.name || s.title).join(' / ') || '-',
-            songAlbum: currentPlayerRef?.songData?.track_info?.album?.name || '-',
+            songName: state?.songDetails?.track_info?.title || '',
+            songSinger: state?.songDetails?.track_info?.singer?.map(s => s.name || s.title).join(' / ') || '-',
+            songAlbum: state?.songDetails?.track_info?.album?.name || '-',
             songCoverPmid: songCoverPmid,
             songCoverUrl: songCoverPmid ? `https://y.qq.com/music/photo_new/T002R800x800M000${songCoverPmid}.jpg` : '',
             songMid: state.songMid,
             songLyricsLines: parsedLyricsRef.current,
+            songCoverColorDominant: state?.songDetails?.songCoverColor?.dominant_color || '',
+            songCoverColorPalette: state?.songDetails?.songCoverColor?.palette || [],
             statusText: state.statusText,
             currentTime: state.formattedCurrentTime,
             duration: state.formattedDuration,
@@ -212,6 +216,8 @@ export const PlayerProvider = ({ children }) => {
             progressValue: audioEl.currentTime || fallbackProgressValue,
             isWsOpen: playerInstance.ws?.readyState === WebSocket.OPEN
         };
+
+        console.log('Player state changed:', state);
 
         setPlayerState(prevState => ({
             ...prevState,
@@ -232,7 +238,7 @@ export const PlayerProvider = ({ children }) => {
                 onChange: handlePlayerStateChange,
             });
             playerRef.current = player;
-            
+
             handlePlayerStateChange(player);
             player.start();
 
@@ -256,7 +262,7 @@ export const PlayerProvider = ({ children }) => {
     // Audio 数据高频读取 (RequestAnimationFrame 循环)
     useEffect(() => {
         let frameId;
-        
+
         if (!isAudioInitialized) {
             return;
         }
@@ -265,7 +271,7 @@ export const PlayerProvider = ({ children }) => {
         const dataArray = audioDataArrayRef.current;
 
         if (!analyser || !dataArray) {
-            return; 
+            return;
         }
 
         const updateAudioData = () => {
@@ -280,7 +286,7 @@ export const PlayerProvider = ({ children }) => {
                 cancelAnimationFrame(frameId);
             }
         };
-    }, [isAudioInitialized]); 
+    }, [isAudioInitialized]);
 
     useEffect(() => {
         playerStateRef.current = playerState;
@@ -442,9 +448,9 @@ export const PlayerProvider = ({ children }) => {
             if (!analyserRef.current) {
                 initWebAudio();
             }
-            
+
             if (audioCtx && audioCtx.state === 'suspended') {
-                 audioCtx.resume().catch(e => console.error("AudioContext resume failed on click:", e));
+                audioCtx.resume().catch(e => console.error("AudioContext resume failed on click:", e));
             }
 
             // 3. 强制尝试播放 <audio> 元素
@@ -454,7 +460,7 @@ export const PlayerProvider = ({ children }) => {
                 if (!hasUserInteracted) {
                     setHasUserInteracted(true);
                 }
-                
+
                 audio.play().catch(error => {
                     // 记录错误，通常是 NotAllowedError 或等待歌曲数据加载
                     console.warn("播放尝试失败:", error.message);

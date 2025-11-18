@@ -205,8 +205,8 @@ export const PlayerProvider = ({ children }) => {
             songCoverUrl: songCoverPmid ? `https://y.qq.com/music/photo_new/T002R800x800M000${songCoverPmid}.jpg` : '',
             songMid: state.songMid,
             songLyricsLines: parsedLyricsRef.current,
-            songCoverColorDominant: state?.songDetails?.songCoverColor?.dominant_color || '',
-            songCoverColorPalette: state?.songDetails?.songCoverColor?.palette || [],
+            songCoverColorDominant: state?.songCoverColor?.dominant_color || '',
+            songCoverColorPalette: state?.songCoverColor?.palette || [],
             statusText: state.statusText,
             currentTime: state.formattedCurrentTime,
             duration: state.formattedDuration,
@@ -216,8 +216,6 @@ export const PlayerProvider = ({ children }) => {
             progressValue: audioEl.currentTime || fallbackProgressValue,
             isWsOpen: playerInstance.ws?.readyState === WebSocket.OPEN
         };
-
-        console.log('Player state changed:', state);
 
         setPlayerState(prevState => ({
             ...prevState,

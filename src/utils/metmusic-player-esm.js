@@ -387,6 +387,7 @@ class MeTMusicPlayer {
         if (!mid) return "";
         if (this.midUrlCache[mid] && this.midUrlCache[mid].url) {
             this.songData = this.midUrlCache[mid].data;
+            this.songMid = mid;
             return this.midUrlCache[mid].url;
         }
         try {
@@ -405,6 +406,7 @@ class MeTMusicPlayer {
                 // 合并避免覆盖 lyrics
                 this.songData = Object.assign({}, this.songData, entry);
             }
+            this.songMid = mid;
             return url;
         } catch (e) {
             this._wsLog('error', 'FETCH', '获取歌曲链接失败', e);

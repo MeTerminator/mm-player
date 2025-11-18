@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { usePlayer } from '../../context/PlayerContext';
 import './Lyrics.css';
+import { adjustColorBrightnessHSV, adjustColorBrightness, hexToRgbString } from '../../utils/adjust-color-brightness';
 
 // 检查是否全中文（用于换行）
 const shouldReplaceSpaceWithNewline = (str) => {
@@ -157,6 +158,9 @@ function Lyrics() {
     const animationEnterClassName = `lyrics-enter-${randomAnimationIndex}`;
     const animationExitClassName = `lyrics-exit-${randomAnimationIndex}`;
 
+    const textColor = adjustColorBrightness(adjustColorBrightnessHSV(playerState.songCoverColorPalette?.[0], 100), 15);
+    const textBackgroudColor = `linear-gradient(to bottom left, rgba(${hexToRgbString(textColor)}, 0.7), rgba(${hexToRgbString(textColor)}, 0.5)) text`;
+
     return (
         <>
             {isPlayingLyrics ? (
@@ -168,6 +172,7 @@ function Lyrics() {
                             id="lyric-buffer-buffer1"
                             className={`lyrics lyrics-buffer ${activeBuffer === 'buffer1' ? animationEnterClassName : animationExitClassName
                                 }`}
+                            style={{background: textBackgroudColor}}
                             ref={lyricBuffer1Ref}
                         >
                             {lyricText1}
@@ -178,6 +183,7 @@ function Lyrics() {
                             id="lyric-buffer-buffer2"
                             className={`lyrics lyrics-buffer ${activeBuffer === 'buffer2' ? animationEnterClassName : animationExitClassName
                                 }`}
+                            style={{background: textBackgroudColor}}
                             ref={lyricBuffer2Ref}
                         >
                             {lyricText2}

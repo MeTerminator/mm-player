@@ -247,7 +247,7 @@ class MeTMusicPlayer {
 
     // ---------- WebSocket 管理 ----------
     connectWebSocket() {
-        const wsUrl = "wss://music.met6.top:444/api-client/ws/listen";
+        const wsUrl = "wss://music.met6.top:444/api/ws/client";
         try {
             this.ws = new WebSocket(wsUrl);
         } catch (e) {
@@ -391,7 +391,7 @@ class MeTMusicPlayer {
             return this.midUrlCache[mid].url;
         }
         try {
-            const response = await fetch(`https://music.met6.top:444/api/song/url/v1/?id=${mid}&level=hq`);
+            const response = await fetch(`https://music.met6.top:444/api/web/song/url/v1?id=${mid}&level=hq`);
             const data = await response.json();
             const entry = data.data?.[0] || null;
             const url = entry?.url || "";
@@ -418,7 +418,7 @@ class MeTMusicPlayer {
         if (!mid) return "";
         if (this.midLyricsCache[mid]) return this.midLyricsCache[mid];
         try {
-            const response = await fetch(`https://music.met6.top:444/api/songlyric_get.php?show=lyric&mid=${mid}`);
+            const response = await fetch(`https://music.met6.top:444/api/v1/lrc?mid=${mid}`);
             const lyrics = await response.text();
             this.midLyricsCache[mid] = lyrics;
             // 也更新当前 songData（如果匹配）
@@ -436,7 +436,8 @@ class MeTMusicPlayer {
         if (!pmid) return "";
         if (this.pmidColorCache[pmid]) return this.pmidColorCache[pmid];
         try {
-            const response = await fetch(`https://music.met6.top:444/api/get_color.php?pmid=${pmid}`);
+            // TODO 此处获取的是封面图片，需要进一步提取主题色
+            const response = await fetch(`https://music.met6.top:444/api/web/album/cover/pic?pic=T002R300x300M000${pmid}.jpg`);
             const colorData = await response.json();
             this.pmidColorCache[pmid] = colorData;
             this.songCoverColor = colorData;

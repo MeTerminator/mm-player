@@ -4,6 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: '/player/',
   plugins: [
     react(),
     VitePWA({
@@ -41,7 +42,7 @@ export default defineConfig({
         short_name: "MeT-Music Player",
         description: "MeT-Music Player",
         display: "standalone",
-        start_url: "/",
+        start_url: "/player/",
         theme_color: "#000000",
         background_color: "#000000",
         icons: [

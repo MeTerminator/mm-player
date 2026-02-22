@@ -1,3 +1,5 @@
+import ColorThief from 'colorthief';
+
 class MeTMusicPlayer {
     /**
      * @param {HTMLAudioElement} audioElement
@@ -432,19 +434,53 @@ class MeTMusicPlayer {
         }
     }
 
+    /**
+     * 在前端通过 ColorThief 提取专辑封面颜色
+     * @param {string} pmid 专辑图片标识
+     */
     async _getPmidColor(pmid) {
-        if (!pmid) return "";
+        if (!pmid) return { dominant_color: "", palette: [] };
         if (this.pmidColorCache[pmid]) return this.pmidColorCache[pmid];
+
+        // 图片地址，使用 300x300 尺寸足以提取颜色且加载快
+        const imageUrl = `https://music.met6.top:444/api/web/album/cover/pic?pic=T002R300x300M000${pmid}.jpg`;
+
         try {
-            // TODO 此处获取的是封面图片，需要进一步提取主题色
-            const response = await fetch(`https://music.met6.top:444/api/web/album/cover/pic?pic=T002R300x300M000${pmid}.jpg`);
-            const colorData = await response.json();
-            this.pmidColorCache[pmid] = colorData;
-            this.songCoverColor = colorData;
-            return colorData;
+            const colors = await new Promise((resolve, reject) => {
+                const img = new Image();
+                // 必须设置 crossOrigin，否则 ColorThief 无法读取 canvas 数据
+                img.crossOrigin = 'Anonymous';
+
+                img.onload = () => {
+                    try {
+                        const colorThief = new ColorThief();
+                        // 1. 提取主色
+                        const dominantRGB = colorThief.getColor(img);
+                        // 2. 提取调色板 (取 6 个颜色)
+                        const paletteRGB = colorThief.getPalette(img, 6);
+
+                        const toHex = (rgb) => `#${rgb.map(x => x.toString(16).padStart(2, '0')).join('')}`;
+
+                        resolve({
+                            dominant_color: toHex(dominantRGB),
+                            palette: paletteRGB.map(rgb => toHex(rgb))
+                        });
+                    } catch (err) {
+                        reject(err);
+                    }
+                };
+
+                img.onerror = () => reject(new Error("图片加载失败"));
+                img.src = imageUrl;
+            });
+
+            this.pmidColorCache[pmid] = colors;
+            this.songCoverColor = colors;
+            return colors;
+
         } catch (e) {
-            this._wsLog('error', 'FETCH', '获取歌词失败', e);
-            return "";
+            this._wsLog('error', 'COLOR_THIEF', '提取颜色失败', e);
+            return { dominant_color: "", palette: [] };
         }
     }
 
